@@ -494,18 +494,30 @@ async function start(){
   $('#gate').hidden=true; $('#app').hidden=false;
   S.month=ymNow();
   buildKeypad(); paintAmount();
-  await load();
+  await Promise.all([load(), loadExtras()]);
 }
 
 /* ── 데이터 ────────────────────────────────────── */
+/** 저장 API들이 이제 최신 데이터를 같이 돌려주므로, 저장 직후엔 이 함수로 바로 반영하고
+ *  (따로 다시 불러오지 않음), 월 이동처럼 "순수 조회"가 필요할 때만 load()/loadExtras()를 씁니다. */
+function applyLoad(d){
+  S.month=d.month; S.names=d.names; S.tx=d.tx; S.recent=d.recent;
+  S.budget=d.budget; S.assets=d.assets; S.series=d.series; S.trend=d.trend||[];
+  renderAll();
+}
+function applyExtras(d){
+  S.fixedExpenses=d.fixedExpenses||[]; S.cards=d.cards||[]; S.categories=d.categories||[];
+  renderAll();
+}
+/** 거래·예산·자산처럼 자주 바뀌는 것만 불러옵니다 (월 이동 등 순수 조회용). */
 async function load(){
-  try{
-    const d = await call('apiLoad', S.pin, S.month);
-    S.month=d.month; S.names=d.names; S.tx=d.tx; S.recent=d.recent;
-    S.budget=d.budget; S.assets=d.assets; S.series=d.series; S.trend=d.trend||[];
-    S.fixedExpenses=d.fixedExpenses||[]; S.cards=d.cards||[]; S.categories=d.categories||[];
-    renderAll();
-  }catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'); }
+  try{ applyLoad(await call('apiLoad', S.pin, S.month)); }
+  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'); }
+}
+/** 카테고리·고정지출·카드처럼 자주 안 바뀌는 것만 불러옵니다 (앱을 켤 때만 호출). */
+async function loadExtras(){
+  try{ applyExtras(await call('apiLoadExtras', S.pin)); }
+  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'); }
 }
 function sumBy(pred){ return S.tx.filter(pred).reduce((a,t)=>a+Number(t.amount),0); }
 function ownerOptions(){ return [S.names[0], S.names[1], '공동']; }
@@ -574,12 +586,10 @@ $('#save').onclick=async()=>{
   S.digits=''; $('#note').value=''; paintAmount();
   toast(cat+' '+won(amount)+' 기록됨');
   try{
-    await call('apiAddTx', S.pin, {amount:amount, kind:kind, category:cat,
+    const d = await call('apiAddTx', S.pin, {amount:amount, kind:kind, category:cat,
       who:S.who, note:note, date:date});
-    const ym=date.slice(0,7);
-    if(S.month!==ym) S.month=ym;
     $('#entry-date').value=todayStr();
-    await load();
+    applyLoad(d);
   }catch(e){ toast('저장하지 못했습니다. 다시 시도하세요.'); }
 };
 
@@ -679,12 +689,12 @@ const digitsOf=id=>Number($(id).value.replace(/[^0-9]/g,'')||0);
 $('#b-save').onclick=async()=>{
   $('#b-save').disabled=true;
   try{
-    await call('apiSaveBudget', S.pin, S.month, {
+    const d = await call('apiSaveBudget', S.pin, S.month, {
       fixed:digitsOf('#b-fixed'), living:digitsOf('#b-living'),
       allowance1:digitsOf('#b-allow1'), allowance2:digitsOf('#b-allow2'), goal:digitsOf('#b-goal')});
     toast('예산 저장됨');
     if(document.activeElement) document.activeElement.blur();
-    await load();
+    applyLoad(d);
   }catch(e){ toast('저장하지 못했습니다'); }
   $('#b-save').disabled=false;
 };
@@ -724,13 +734,15 @@ function renderAssets(){
     inp.onblur=async()=>{
       const v=Number(inp.value.replace(/[^0-9]/g,'')||0);
       if(v===Number(r.balance)) return;
-      try{ await call('apiSaveAsset',S.pin,{id:r.id,balance:v}); await load(); }
+      try{ applyLoad(await call('apiSaveAsset',S.pin,{id:r.id,balance:v},S.month)); }
       catch(e){ toast('저장하지 못했습니다'); }
     };
     const x=el('button','x'); x.textContent='✕';
     x.onclick=async()=>{
       if(!confirm(r.account+' 을(를) 이 달 목록에서 지울까요?')) return;
-      await call('apiDeleteAsset',S.pin,r.id); await load();
+      row.remove();
+      try{ applyLoad(await call('apiDeleteAsset',S.pin,r.id,S.month)); }
+      catch(e){ toast('삭제하지 못했습니다'); }
     };
     row.appendChild(inp); row.appendChild(x);
 
@@ -739,7 +751,7 @@ function renderAssets(){
     purpose.value=r.purpose||'';
     purpose.onblur=async()=>{
       if(purpose.value.trim()===(r.purpose||'')) return;
-      try{ await call('apiSaveAsset',S.pin,{id:r.id,purpose:purpose.value.trim()}); await load(); }
+      try{ applyLoad(await call('apiSaveAsset',S.pin,{id:r.id,purpose:purpose.value.trim()},S.month)); }
       catch(e){ toast('저장하지 못했습니다'); }
     };
     main.appendChild(purpose);
@@ -756,15 +768,15 @@ $('#a-add').onclick=async()=>{
   const owner=ownerMap[String(op)]||'공동';
   const purpose=prompt('용도 (선택, 예: 비상금, 여행자금)')||'';
   try{
-    const r=await call('apiSaveAsset',S.pin,{ym:S.month,account:account,kind:kind,balance:0,owner:owner,purpose:purpose});
-    toast(r.ok?'추가됨':r.message); await load();
+    const r=await call('apiSaveAsset',S.pin,{ym:S.month,account:account,kind:kind,balance:0,owner:owner,purpose:purpose},S.month);
+    toast(r.success?'추가됨':r.message); applyLoad(r);
   }catch(e){ toast('추가하지 못했습니다'); }
 };
 $('#a-copy').onclick=async()=>{
   try{
     const r=await call('apiCopyAssets',S.pin,S.month);
-    toast(r.ok?r.count+'개 계좌를 가져왔습니다':r.message);
-    if(r.ok) await load();
+    toast(r.success?r.count+'개 계좌를 가져왔습니다':r.message);
+    applyLoad(r);
   }catch(e){ toast('가져오지 못했습니다'); }
 };
 function drawChart(series){
@@ -872,14 +884,15 @@ function renderLog(){
         const amount=Number(amtInp.value.replace(/[^0-9]/g,'')||0);
         if(!dateInp.value || amount<=0){ toast('날짜와 금액을 확인하세요'); return; }
         try{
-          await call('apiEditTx', S.pin, t.id, {date:dateInp.value, amount:amount, note:noteInp.value.trim()});
-          toast('수정됨'); await load();
+          const d = await call('apiEditTx', S.pin, t.id, {date:dateInp.value, amount:amount, note:noteInp.value.trim()}, S.month);
+          toast('수정됨'); applyLoad(d);
         }catch(err){ toast('수정하지 못했습니다'); }
       };
       editBox.querySelector('.ef-del').onclick=async e=>{
         e.stopPropagation();
         if(!confirm('삭제할까요?')) return;
-        try{ await call('apiDeleteTx',S.pin,t.id); toast('삭제됨'); await load(); }
+        row.remove(); toast('삭제됨');
+        try{ const d = await call('apiDeleteTx',S.pin,t.id,S.month); applyLoad(d); }
         catch(err){ toast('삭제하지 못했습니다'); }
       };
       editBox.onclick=e=>e.stopPropagation();
@@ -915,15 +928,15 @@ function renderFixed(){
     const tgl=el('button','x'); tgl.textContent=f.active?'끄기':'켜기';
     tgl.onclick=async()=>{
       try{
-        await call('apiSaveFixed',S.pin,{id:f.id,item:f.item,amount:f.amount,day:f.day,
-          owner:f.owner,memo:f.memo,active:!f.active});
-        await load();
+        applyExtras(await call('apiSaveFixed',S.pin,{id:f.id,item:f.item,amount:f.amount,day:f.day,
+          owner:f.owner,memo:f.memo,active:!f.active}));
       }catch(e){ toast('변경하지 못했습니다'); }
     };
     const x=el('button','x'); x.textContent='✕';
     x.onclick=async()=>{
       if(!confirm(f.item+' 을(를) 삭제할까요?')) return;
-      try{ await call('apiDeleteFixed',S.pin,f.id); await load(); }
+      row.remove();
+      try{ applyExtras(await call('apiDeleteFixed',S.pin,f.id)); }
       catch(e){ toast('삭제하지 못했습니다'); }
     };
     row.appendChild(amt); row.appendChild(tgl); row.appendChild(x);
@@ -943,19 +956,19 @@ $('#fx-add').onclick=async()=>{
   if(!item || amount<=0 || day<1 || day>31){ toast('항목, 금액, 결제일(1~31)을 확인하세요'); return; }
   $('#fx-add').disabled=true;
   try{
-    await call('apiSaveFixed',S.pin,{item:item,amount:amount,day:day,owner:owner,memo:memo});
+    const d = await call('apiSaveFixed',S.pin,{item:item,amount:amount,day:day,owner:owner,memo:memo});
     $('#fx-item').value=''; $('#fx-amount').value=''; $('#fx-day').value=''; $('#fx-memo').value='';
     $('#fx-form').hidden=true; $('#fx-toggle').textContent='+ 새 고정지출 추가';
-    toast('고정지출 등록됨'); await load();
+    toast('고정지출 등록됨'); applyExtras(d);
   }catch(e){ toast('등록하지 못했습니다'); }
   $('#fx-add').disabled=false;
 };
 $('#fx-run').onclick=async()=>{
   $('#fx-run').disabled=true;
   try{
-    const r=await call('apiRunFixedNow',S.pin);
+    const r=await call('apiRunFixedNow',S.pin,S.month);
     toast(r.count>0 ? r.count+'건 기록됨' : '오늘 처리할 항목이 없습니다');
-    if(r.count>0) await load();
+    applyLoad(r); applyExtras(r);
   }catch(e){ toast('확인하지 못했습니다'); }
   $('#fx-run').disabled=false;
 };
@@ -979,7 +992,8 @@ function renderCards(){
     const del=el('button','del'); del.textContent='삭제';
     del.onclick=async()=>{
       if(!confirm(c.name+' 을(를) 삭제할까요?')) return;
-      try{ await call('apiDeleteCard',S.pin,c.id); await load(); }
+      box.remove();
+      try{ applyExtras(await call('apiDeleteCard',S.pin,c.id)); }
       catch(e){ toast('삭제하지 못했습니다'); }
     };
     box.appendChild(del);
@@ -996,11 +1010,11 @@ $('#cd-add').onclick=async()=>{
   const memo=$('#cd-memo').value.trim();
   $('#cd-add').disabled=true;
   try{
-    await call('apiSaveCard',S.pin,{name:name,purpose:purpose,minSpend:minSpend,owner:owner,benefit:benefit,memo:memo});
+    const d = await call('apiSaveCard',S.pin,{name:name,purpose:purpose,minSpend:minSpend,owner:owner,benefit:benefit,memo:memo});
     $('#cd-name').value=''; $('#cd-purpose').value=''; $('#cd-min').value='';
     $('#cd-benefit').value=''; $('#cd-memo').value='';
     $('#cd-form').hidden=true; $('#cd-toggle').textContent='+ 새 카드 추가';
-    toast('카드 등록됨'); await load();
+    toast('카드 등록됨'); applyExtras(d);
   }catch(e){ toast('등록하지 못했습니다'); }
   $('#cd-add').disabled=false;
 };
@@ -1048,7 +1062,8 @@ function renderCategories(){
       const del=el('button','x'); del.textContent='✕';
       del.onclick=async()=>{
         if(!confirm(c.name+' 카테고리를 삭제할까요?\n(이미 기록된 내역은 그대로 남습니다)')) return;
-        try{ await call('apiDeleteCategory',S.pin,c.id); await load(); }
+        row.remove();
+        try{ applyExtras(await call('apiDeleteCategory',S.pin,c.id)); }
         catch(e){ toast('삭제하지 못했습니다'); }
       };
       row.appendChild(edit); row.appendChild(del);
@@ -1069,10 +1084,10 @@ $('#cg-save').onclick=async()=>{
   if(!name){ toast('이름을 입력하세요'); return; }
   $('#cg-save').disabled=true;
   try{
-    await call('apiSaveCategory',S.pin,{id:id||undefined, name:name, kind:kind});
+    const d = await call('apiSaveCategory',S.pin,{id:id||undefined, name:name, kind:kind});
     $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출';
     $('#cg-form').hidden=true; $('#cg-toggle').textContent='+ 새 카테고리 추가';
-    toast('저장됨'); await load();
+    toast('저장됨'); applyExtras(d);
   }catch(e){ toast('저장하지 못했습니다'); }
   $('#cg-save').disabled=false;
 };
