@@ -179,6 +179,23 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .card .meta{font-size:.75rem;color:var(--faint);margin-top:5px}
 .card .del{margin-top:8px;color:var(--over);font-size:.8125rem;font-weight:600}
 
+.pill{display:inline-block;padding:6px 12px;border-radius:999px;background:var(--surface);
+  font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 6px 6px 0}
+.pill.done{background:var(--me);color:#fff}
+.cmp-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:.8125rem}
+.cmp-row.cmp-head{color:var(--muted);font-weight:600;font-size:.75rem}
+.cmp-cat{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmp-v{width:76px;flex:none;text-align:right;font-variant-numeric:tabular-nums}
+.tax-card{padding:14px;background:var(--surface);border-radius:13px;margin-bottom:10px}
+.tax-card b{font-size:.9375rem}
+.tax-card .sub{margin:6px 0 0}
+.ytable-wrap{overflow-x:auto;margin-top:4px}
+.ytable{border-collapse:collapse;width:100%;min-width:640px;font-size:.75rem}
+.ytable th,.ytable td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+.ytable th:first-child,.ytable td:first-child{text-align:left;position:sticky;left:0;
+  background:var(--paper);max-width:90px;overflow:hidden;text-overflow:ellipsis}
+.ytable th{color:var(--muted);font-weight:600}
+
 #tabs{flex:none;display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);
   background:var(--paper);padding-bottom:var(--pad)}
 #tabs button{padding:11px 0 9px;font-size:.6875rem;font-weight:600;color:var(--faint)}
@@ -276,6 +293,13 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <div class="field"><label>저축 목표</label><input id="b-goal" inputmode="numeric" placeholder="0"></div>
         <button class="wide" id="b-save">예산 저장</button>
       </div>
+      <div class="editor">
+        <h2>이 달 정산</h2>
+        <div id="settle-status"></div>
+        <button class="wide ghost" id="settle-toggle">이번 달 정산 완료</button>
+        <h2 style="margin-top:26px">카테고리별 개인 지출 비교</h2>
+        <div id="settle-compare"></div>
+      </div>
     </div>
   </section>
 
@@ -314,6 +338,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <button data-sub="fixed" aria-pressed="true">고정지출</button>
         <button data-sub="card" aria-pressed="false">카드관리</button>
         <button data-sub="cat" aria-pressed="false">카테고리</button>
+        <button data-sub="year" aria-pressed="false">연간</button>
       </div>
 
       <div id="mg-fixed">
@@ -360,8 +385,25 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
               <option value="저축">저축</option>
             </select>
           </div>
+          <div class="field"><label for="cg-irregular">비정기 지출</label>
+            <input type="checkbox" id="cg-irregular" style="margin-left:auto;width:20px;height:20px">
+          </div>
           <button class="wide" id="cg-save">저장</button>
         </div>
+      </div>
+
+      <div id="mg-year" hidden>
+        <h2>연말정산 카드 계산기</h2>
+        <div class="field"><label id="inc1-lbl">연봉</label><input id="income1" inputmode="numeric" placeholder="0"></div>
+        <div class="field"><label id="inc2-lbl">연봉</label><input id="income2" inputmode="numeric" placeholder="0"></div>
+        <button class="wide ghost" id="income-save">연봉 저장</button>
+        <div id="tax-result" style="margin-top:16px"></div>
+
+        <h2 style="margin-top:26px">비정기 지출 (올해)</h2>
+        <div id="irregular-box"></div>
+
+        <h2 style="margin-top:26px">연간 결산</h2>
+        <div class="ytable-wrap" id="year-table"></div>
       </div>
     </div>
   </section>
@@ -410,7 +452,8 @@ const S={ pin:'', who:'', names:['나','배우자'], month:'',
           tx:[], recent:[], budget:null, assets:[], series:[], trend:[],
           fixedExpenses:[], cards:[], categories:[],
           entryKind:'지출', cat:'', digits:'',
-          logFilter:{kind:'all', who:'all', cat:'all', q:''}, searchResult:null };
+          logFilter:{kind:'all', who:'all', cat:'all', q:''}, searchResult:null,
+          settlement:null, yearSummary:null, year:new Date().getFullYear() };
 
 const store={
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
@@ -506,10 +549,16 @@ function applyLoad(d){
   S.month=d.month; S.names=d.names; S.tx=d.tx; S.recent=d.recent;
   S.budget=d.budget; S.assets=d.assets; S.series=d.series; S.trend=d.trend||[];
   renderAll();
+  loadSettlement();
 }
 function applyExtras(d){
   S.fixedExpenses=d.fixedExpenses||[]; S.cards=d.cards||[]; S.categories=d.categories||[];
   renderAll();
+}
+/** 이 달 정산 완료 상태만 따로 불러옵니다 (월이 바뀔 때마다 자동 호출). */
+async function loadSettlement(){
+  try{ S.settlement = await call('apiGetSettlement', S.pin, S.month); renderSettle(); }
+  catch(e){}
 }
 /** 거래·예산·자산처럼 자주 바뀌는 것만 불러옵니다 (월 이동 등 순수 조회용). */
 async function load(){
@@ -700,6 +749,55 @@ $('#b-save').onclick=async()=>{
   }catch(e){ toast('저장하지 못했습니다'); }
   $('#b-save').disabled=false;
 };
+
+/* ── 이 달 정산 ────────────────────────────────── */
+function renderSettle(){
+  const box=$('#settle-status'); if(!box) return;
+  const st=S.settlement;
+  if(!st){ box.innerHTML=''; return; }
+  box.innerHTML = st.names.map(n=>{
+    const s=st.status[n]||{done:false};
+    return '<span class="pill'+(s.done?' done':'')+'">'+n+' '+(s.done?'완료':'대기')+'</span>';
+  }).join('');
+  const mine = st.status[S.who];
+  const btn=$('#settle-toggle');
+  const done = !!(mine&&mine.done);
+  btn.textContent = done ? '정산 완료 취소' : '이번 달 정산 완료';
+  btn.classList.toggle('ghost', !done);
+}
+$('#settle-toggle').onclick=async()=>{
+  const mine = S.settlement && S.settlement.status[S.who];
+  const newDone = !(mine && mine.done);
+  $('#settle-toggle').disabled=true;
+  try{
+    S.settlement = await call('apiConfirmSettlement', S.pin, S.month, S.who, newDone);
+    renderSettle();
+    toast(newDone?'정산 완료로 표시했습니다':'정산 완료를 취소했습니다');
+  }catch(e){ toast('처리하지 못했습니다'); }
+  $('#settle-toggle').disabled=false;
+};
+function renderCompare(){
+  const box=$('#settle-compare'); if(!box) return;
+  const byCat={};
+  S.tx.forEach(t=>{
+    if(!byCat[t.category]) byCat[t.category]={};
+    byCat[t.category][t.who]=(byCat[t.category][t.who]||0)+t.amount;
+  });
+  const cats=Object.keys(byCat).sort((a,b)=>{
+    const ta=Object.values(byCat[a]).reduce((x,y)=>x+y,0);
+    const tb=Object.values(byCat[b]).reduce((x,y)=>x+y,0);
+    return tb-ta;
+  });
+  if(!cats.length){ box.innerHTML='<p class="sub">이 달 기록이 없습니다</p>'; return; }
+  let html='<div class="cmp-row cmp-head"><span class="cmp-cat"></span>'+
+    '<span class="cmp-v">'+S.names[0]+'</span><span class="cmp-v">'+S.names[1]+'</span></div>';
+  cats.forEach(cat=>{
+    const v1=byCat[cat][S.names[0]]||0, v2=byCat[cat][S.names[1]]||0;
+    html+='<div class="cmp-row"><span class="cmp-cat">'+cat+'</span>'+
+      '<span class="cmp-v">'+comma(v1)+'</span><span class="cmp-v">'+comma(v2)+'</span></div>';
+  });
+  box.innerHTML=html;
+}
 
 /* ── 자산 ──────────────────────────────────────── */
 function renderAssets(){
@@ -1037,6 +1135,8 @@ document.querySelectorAll('#mg-switch button').forEach(btn=>{
     $('#mg-fixed').hidden = sub!=='fixed';
     $('#mg-card').hidden = sub!=='card';
     $('#mg-cat').hidden = sub!=='cat';
+    $('#mg-year').hidden = sub!=='year';
+    if(sub==='year') loadYearSummary();
   };
 });
 
@@ -1055,10 +1155,13 @@ function renderCategories(){
     h.textContent=kind; list.appendChild(h);
     items.forEach(c=>{
       const row=el('div','acct');
-      row.innerHTML='<span class="who"></span><div class="main"><div class="t">'+c.name+'</div></div>';
+      row.innerHTML='<span class="who"></span><div class="main"><div class="t">'+c.name+
+        (c.irregular?' <span style="color:var(--muted);font-weight:400;font-size:.75rem">· 비정기</span>':'')+
+        '</div></div>';
       const edit=el('button','x'); edit.textContent='수정';
       edit.onclick=()=>{
         $('#cg-id').value=c.id; $('#cg-name').value=c.name; $('#cg-kind').value=c.kind;
+        $('#cg-irregular').checked=!!c.irregular;
         $('#cg-form').hidden=false; $('#cg-toggle').textContent='취소';
       };
       const del=el('button','x'); del.textContent='✕';
@@ -1076,22 +1179,95 @@ function renderCategories(){
 $('#cg-toggle').onclick=()=>{
   const hide=!$('#cg-form').hidden;
   $('#cg-form').hidden=hide;
-  if(hide){ $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출'; }
+  if(hide){ $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출'; $('#cg-irregular').checked=false; }
   $('#cg-toggle').textContent = hide ? '+ 새 카테고리 추가' : '취소';
 };
 $('#cg-save').onclick=async()=>{
   const id=$('#cg-id').value;
   const name=$('#cg-name').value.trim();
   const kind=$('#cg-kind').value;
+  const irregular=$('#cg-irregular').checked;
   if(!name){ toast('이름을 입력하세요'); return; }
   $('#cg-save').disabled=true;
   try{
-    const d = await call('apiSaveCategory',S.pin,{id:id||undefined, name:name, kind:kind});
-    $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출';
+    const d = await call('apiSaveCategory',S.pin,{id:id||undefined, name:name, kind:kind, irregular:irregular});
+    $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출'; $('#cg-irregular').checked=false;
     $('#cg-form').hidden=true; $('#cg-toggle').textContent='+ 새 카테고리 추가';
     toast('저장됨'); applyExtras(d);
   }catch(e){ toast('저장하지 못했습니다'); }
   $('#cg-save').disabled=false;
+};
+
+/* ── 관리: 연간(연말정산·비정기·연간결산) ─────────── */
+async function loadYearSummary(){
+  try{ S.yearSummary = await call('apiYearSummary', S.pin, S.year); renderYear(); }
+  catch(e){ toast('연간 데이터를 불러오지 못했습니다'); }
+}
+function renderYear(){
+  const d=S.yearSummary; if(!d) return;
+  $('#inc1-lbl').textContent=S.names[0]+' 연봉';
+  $('#inc2-lbl').textContent=S.names[1]+' 연봉';
+  if(document.activeElement!==$('#income1')){
+    const v1=d.income[S.names[0]]; $('#income1').value = v1?comma(v1):'';
+  }
+  if(document.activeElement!==$('#income2')){
+    const v2=d.income[S.names[1]]; $('#income2').value = v2?comma(v2):'';
+  }
+
+  $('#tax-result').innerHTML = S.names.map(n=>{
+    const income=d.income[n]||0, spent=d.spentByPerson[n]||0, threshold=d.threshold[n]||0;
+    if(!income){
+      return '<div class="tax-card"><b>'+n+'</b><p class="sub">연봉을 입력하고 저장하면 계산됩니다</p></div>';
+    }
+    const remain=threshold-spent;
+    const body = remain>0
+      ? '<p class="sub">공제 문턱(연봉의 25%) <b class="num">'+comma(threshold)+'원</b> · 앞으로 <b class="num" style="color:var(--over)">'+comma(remain)+'원</b> 더 써야 공제가 시작돼요. 그때까진 혜택 좋은 신용카드가 유리해요.</p>'
+      : '<p class="sub">공제 문턱(연봉의 25%) <b class="num">'+comma(threshold)+'원</b>을 <b class="num" style="color:var(--me)">'+comma(-remain)+'원</b> 넘겼어요. 지금부터는 체크카드·현금영수증(30% 공제)이 더 유리해요.</p>';
+    return '<div class="tax-card"><b>'+n+'</b><p class="sub">올해 지출 <span class="num">'+comma(spent)+'원</span></p>'+body+'</div>';
+  }).join('');
+
+  const irr=$('#irregular-box');
+  const items=Object.entries(d.irregularByCategory||{});
+  if(!items.length){
+    irr.innerHTML='<p class="sub">비정기로 표시된 카테고리의 지출이 아직 없습니다. 카테고리 관리에서 "비정기 지출"에 체크해보세요.</p>';
+  } else {
+    irr.innerHTML='<p class="big num" style="margin-bottom:10px">'+comma(d.irregularTotal)+'원</p>'+
+      items.map(([cat,v])=>'<div class="cmp-row"><span class="cmp-cat">'+cat+'</span><span class="cmp-v">'+comma(v)+'원</span></div>').join('');
+  }
+
+  const cats=Object.keys(d.categoryMonthly||{});
+  const table=$('#year-table');
+  if(!cats.length){
+    table.innerHTML='<p class="sub">'+d.year+'년 지출 기록이 없습니다</p>';
+  } else {
+    let html='<table class="ytable"><thead><tr><th></th>'+
+      Array.from({length:12},(_,i)=>'<th>'+(i+1)+'월</th>').join('')+'<th>합계</th></tr></thead><tbody>';
+    cats.forEach(cat=>{
+      const vals=d.categoryMonthly[cat];
+      const total=vals.reduce((a,b)=>a+b,0);
+      html+='<tr><td>'+cat+'</td>'+vals.map(v=>'<td>'+(v?comma(v):'—')+'</td>').join('')+'<td><b>'+comma(total)+'</b></td></tr>';
+    });
+    html+='</tbody></table>';
+    table.innerHTML=html;
+  }
+}
+['#income1','#income2'].forEach(id=>{
+  $(id).addEventListener('input',e=>{
+    const raw=e.target.value.replace(/[^0-9]/g,'');
+    e.target.value = raw?comma(raw):'';
+  });
+});
+$('#income-save').onclick=async()=>{
+  const i1=Number($('#income1').value.replace(/[^0-9]/g,'')||0);
+  const i2=Number($('#income2').value.replace(/[^0-9]/g,'')||0);
+  $('#income-save').disabled=true;
+  try{
+    await call('apiSaveIncome', S.pin, i1, i2);
+    toast('연봉 저장됨');
+    if(document.activeElement) document.activeElement.blur();
+    await loadYearSummary();
+  }catch(e){ toast('저장하지 못했습니다'); }
+  $('#income-save').disabled=false;
 };
 
 /* ── 공통 ──────────────────────────────────────── */
@@ -1109,6 +1285,7 @@ function renderAll(){
   buildLogFilters(); renderLog();
   buildOwnerSelect($('#fx-owner'), true); buildOwnerSelect($('#cd-owner'), true);
   renderFixed(); renderCards(); renderCategories();
+  renderSettle(); renderCompare();
 }
 
 document.querySelectorAll('#tabs button').forEach(btn=>{
