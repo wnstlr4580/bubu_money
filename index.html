@@ -205,6 +205,25 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 #tabs button[aria-pressed="true"]{color:var(--ink)}
 #tabs .ic{display:block;font-size:1.05rem;margin-bottom:2px;font-weight:400}
 
+.launch{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.launch .plus{width:76px;height:76px;border-radius:50%;background:var(--ink);color:#fff;
+  font-size:2.25rem;font-weight:400;display:flex;align-items:center;justify-content:center;
+  line-height:1;transition:transform var(--tap)}
+.launch .plus:active{transform:scale(.94)}
+.launch p{color:var(--muted);font-size:.9375rem;margin:0}
+
+.sheet{position:fixed;inset:0;z-index:60;background:var(--paper);
+  display:flex;flex-direction:column;transform:translateX(100%);
+  transition:transform .28s cubic-bezier(.2,.8,.3,1);touch-action:pan-y}
+.sheet.open{transform:translateX(0)}
+.sheet-head{flex:none;display:flex;align-items:center;gap:6px;
+  padding:calc(env(safe-area-inset-top,0px) + 14px) 10px 14px 6px;border-bottom:1px solid var(--line)}
+.sheet-head button{font-size:1.6rem;color:var(--muted);padding:4px 10px;line-height:1}
+.sheet-head h2{margin:0;font-size:1.0625rem;font-weight:700;color:var(--ink)}
+.sheet-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  display:flex;flex-direction:column;padding:18px 20px calc(28px + var(--pad))}
+.sheet-body .field:last-of-type{border-bottom:0}
+
 #gate{position:fixed;inset:0;background:var(--paper);z-index:20;display:flex;
   flex-direction:column;justify-content:center;padding:30px 26px;gap:10px;text-align:center}
 #gate h1{font-size:1.4rem;font-weight:800;letter-spacing:-.03em;margin:0}
@@ -255,28 +274,38 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   </div>
 
   <section class="screen on" id="entry">
-    <div class="amount"><b id="amt" class="zero num"><span class="won">₩</span>0</b></div>
-    <div class="kindsel" id="kindsel">
-      <button data-kind="지출" aria-pressed="true">지출</button>
-      <button data-kind="수입" aria-pressed="false">수입</button>
-      <button data-kind="저축" aria-pressed="false">저축</button>
-    </div>
-    <div class="chips" id="chips"></div>
-    <div class="keys" id="keys"></div>
-    <div class="daterow" id="goal-row" hidden>
-      <label for="entry-goal">저축 목표</label>
-      <select id="entry-goal"></select>
-    </div>
-    <div class="daterow">
-      <label for="entry-date">날짜</label>
-      <input type="date" id="entry-date">
-      <button id="date-today" type="button">오늘</button>
-    </div>
-    <div class="commit">
-      <input id="note" placeholder="메모 (선택)" enterkeyhint="done">
-      <button id="save" disabled>기록</button>
+    <div class="launch">
+      <button class="plus" id="entry-launch" aria-label="새 거래 입력">＋</button>
+      <p>탭해서 입력하기</p>
     </div>
   </section>
+
+  <div class="sheet" id="entry-sheet">
+    <div class="sheet-head"><button id="entry-close" aria-label="닫기">‹</button><h2>입력</h2></div>
+    <div class="sheet-body">
+      <div class="amount"><b id="amt" class="zero num"><span class="won">₩</span>0</b></div>
+      <div class="kindsel" id="kindsel">
+        <button data-kind="지출" aria-pressed="true">지출</button>
+        <button data-kind="수입" aria-pressed="false">수입</button>
+        <button data-kind="저축" aria-pressed="false">저축</button>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="keys" id="keys"></div>
+      <div class="daterow" id="goal-row" hidden>
+        <label for="entry-goal">저축 목표</label>
+        <select id="entry-goal"></select>
+      </div>
+      <div class="daterow">
+        <label for="entry-date">날짜</label>
+        <input type="date" id="entry-date">
+        <button id="date-today" type="button">오늘</button>
+      </div>
+      <div class="commit">
+        <input id="note" placeholder="메모 (선택)" enterkeyhint="done">
+        <button id="save" disabled>기록</button>
+      </div>
+    </div>
+  </div>
 
   <section class="screen" id="month">
     <div class="body">
@@ -321,7 +350,10 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <div id="a-list"></div>
         <button class="wide ghost" id="a-copy">지난달 계좌 그대로 가져오기</button>
         <button class="wide ghost" id="a-add-toggle" style="margin-top:8px">+ 계좌 추가</button>
-        <div class="editor" id="a-form" hidden style="border-top:none;padding-top:16px">
+      </div>
+      <div class="sheet" id="a-form">
+        <div class="sheet-head"><button id="a-form-close" aria-label="닫기">‹</button><h2>계좌 추가</h2></div>
+        <div class="sheet-body">
           <div class="field"><label>계좌 이름</label><input id="a-account" placeholder="예: 주택청약"></div>
           <div class="field"><label>종류</label>
             <select id="a-kind">
@@ -384,7 +416,10 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <div id="fx-list"></div>
         <button class="wide ghost" id="fx-run">오늘 날짜 기준으로 지금 확인</button>
         <button class="wide ghost" id="fx-toggle" style="margin-top:8px">+ 새 고정지출 추가</button>
-        <div class="editor" id="fx-form" hidden style="border-top:none;padding-top:16px">
+      </div>
+      <div class="sheet" id="fx-form">
+        <div class="sheet-head"><button id="fx-form-close" aria-label="닫기">‹</button><h2>고정지출 추가</h2></div>
+        <div class="sheet-body">
           <div class="field"><label>항목</label><input id="fx-item" placeholder="예: 월세"></div>
           <div class="field"><label>금액</label><input id="fx-amount" inputmode="numeric" placeholder="0"></div>
           <div class="field"><label>결제일</label><input id="fx-day" inputmode="numeric" placeholder="예: 25" style="width:30%"></div>
@@ -398,7 +433,10 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <h2>등록된 카드</h2>
         <div id="cd-list"></div>
         <button class="wide ghost" id="cd-toggle">+ 새 카드 추가</button>
-        <div class="editor" id="cd-form" hidden style="border-top:none;padding-top:16px">
+      </div>
+      <div class="sheet" id="cd-form">
+        <div class="sheet-head"><button id="cd-form-close" aria-label="닫기">‹</button><h2>카드 추가</h2></div>
+        <div class="sheet-body">
           <div class="field"><label>카드명</label><input id="cd-name" placeholder="예: OO카드"></div>
           <div class="field"><label>목적</label><input id="cd-purpose" placeholder="예: 주유·마트"></div>
           <div class="field"><label>전월실적</label><input id="cd-min" inputmode="numeric" placeholder="0"></div>
@@ -413,7 +451,10 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <h2>카테고리</h2>
         <div id="cg-list"></div>
         <button class="wide ghost" id="cg-toggle">+ 새 카테고리 추가</button>
-        <div class="editor" id="cg-form" hidden style="border-top:none;padding-top:16px">
+      </div>
+      <div class="sheet" id="cg-form">
+        <div class="sheet-head"><button id="cg-form-close" aria-label="닫기">‹</button><h2>카테고리 추가</h2></div>
+        <div class="sheet-body">
           <input type="hidden" id="cg-id">
           <div class="field"><label>이름</label><input id="cg-name" placeholder="예: 병원비"></div>
           <div class="field"><label>구분</label>
@@ -434,7 +475,10 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <h2>저축 목표</h2>
         <div id="gl-list"></div>
         <button class="wide ghost" id="gl-toggle">+ 새 목표 추가</button>
-        <div class="editor" id="gl-form" hidden style="border-top:none;padding-top:16px">
+      </div>
+      <div class="sheet" id="gl-form">
+        <div class="sheet-head"><button id="gl-form-close" aria-label="닫기">‹</button><h2>저축 목표 추가</h2></div>
+        <div class="sheet-body">
           <input type="hidden" id="gl-id">
           <div class="field"><label>이름</label><input id="gl-name" placeholder="예: 자동차"></div>
           <div class="field"><label>목표금액</label><input id="gl-target" inputmode="numeric" placeholder="0"></div>
@@ -915,6 +959,35 @@ API.apiYearSummary = async (pin, year) => {
 const $ = s=>document.querySelector(s);
 const el=(t,c)=>{const n=document.createElement(t); if(c) n.className=c; return n;};
 
+/* ── 전체화면 입력 시트 (오른쪽에서 슬라이드 + 왼쪽 가장자리 스와이프로 닫기) ── */
+function openSheet(sel){ $(sel).classList.add('open'); }
+function closeSheet(sel){ $(sel).classList.remove('open'); }
+function setupSheetSwipe(sheet){
+  let startX=null, startY=null, dragging=false, dx=0;
+  sheet.addEventListener('touchstart', e=>{
+    const t=e.touches[0];
+    if(t.clientX>28){ dragging=false; return; }
+    startX=t.clientX; startY=t.clientY; dragging=true; dx=0;
+    sheet.style.transition='none';
+  }, {passive:true});
+  sheet.addEventListener('touchmove', e=>{
+    if(!dragging) return;
+    const t=e.touches[0];
+    const mx=t.clientX-startX, my=t.clientY-startY;
+    if(Math.abs(my)>Math.abs(mx)+10){ dragging=false; sheet.style.transition=''; sheet.style.transform=''; return; }
+    dx=Math.max(0, mx);
+    sheet.style.transform='translateX('+dx+'px)';
+  }, {passive:true});
+  sheet.addEventListener('touchend', ()=>{
+    if(!dragging) return;
+    dragging=false;
+    sheet.style.transition='';
+    sheet.style.transform='';
+    if(dx > sheet.offsetWidth*0.28) sheet.classList.remove('open');
+  });
+}
+document.querySelectorAll('.sheet').forEach(setupSheetSwipe);
+
 const ASSET_KINDS=['예금','투자','연금','부동산','부채'];
 
 const S={ pin:'', who:'', names:['나','배우자'], month:'',
@@ -1112,6 +1185,8 @@ function paintAmount(){
 }
 $('#entry-date').value=todayStr();
 $('#date-today').onclick=()=>{ $('#entry-date').value=todayStr(); };
+$('#entry-launch').onclick=()=>openSheet('#entry-sheet');
+$('#entry-close').onclick=()=>closeSheet('#entry-sheet');
 $('#save').onclick=async()=>{
   const amount=Number(S.digits||0); if(amount<=0) return;
   if(!S.cat){ toast('카테고리를 선택하세요'); return; }
@@ -1346,12 +1421,11 @@ function renderAssets(){
   });
 }
 $('#a-add-toggle').onclick=()=>{
-  const hide=!$('#a-form').hidden;
-  $('#a-form').hidden=hide;
-  if(hide){ $('#a-account').value=''; $('#a-kind').value='예금'; $('#a-purpose').value=''; }
-  else buildOwnerSelect($('#a-owner'));
-  $('#a-add-toggle').textContent = hide ? '+ 계좌 추가' : '취소';
+  $('#a-account').value=''; $('#a-kind').value='예금'; $('#a-purpose').value='';
+  buildOwnerSelect($('#a-owner'));
+  openSheet('#a-form');
 };
+$('#a-form-close').onclick=()=>closeSheet('#a-form');
 $('#a-add-save').onclick=async()=>{
   const account=$('#a-account').value.trim();
   if(!account){ toast('계좌 이름을 입력하세요'); return; }
@@ -1362,7 +1436,7 @@ $('#a-add-save').onclick=async()=>{
   try{
     const r=await call('apiSaveAsset',S.pin,{ym:S.month,account:account,kind:kind,balance:0,owner:owner,purpose:purpose},S.month);
     toast(r.success?'추가됨':r.message);
-    if(r.success){ $('#a-form').hidden=true; $('#a-add-toggle').textContent='+ 계좌 추가'; }
+    if(r.success) closeSheet('#a-form');
     applyLoad(r);
   }catch(e){ toast('추가하지 못했습니다'); }
   $('#a-add-save').disabled=false;
@@ -1553,7 +1627,7 @@ $('#fx-add').onclick=async()=>{
   try{
     const d = await call('apiSaveFixed',S.pin,{item:item,amount:amount,day:day,owner:owner,memo:memo});
     $('#fx-item').value=''; $('#fx-amount').value=''; $('#fx-day').value=''; $('#fx-memo').value='';
-    $('#fx-form').hidden=true; $('#fx-toggle').textContent='+ 새 고정지출 추가';
+    closeSheet('#fx-form');
     toast('고정지출 등록됨'); applyExtras(d);
   }catch(e){ toast('등록하지 못했습니다'); }
   $('#fx-add').disabled=false;
@@ -1608,21 +1682,15 @@ $('#cd-add').onclick=async()=>{
     const d = await call('apiSaveCard',S.pin,{name:name,purpose:purpose,minSpend:minSpend,owner:owner,benefit:benefit,memo:memo});
     $('#cd-name').value=''; $('#cd-purpose').value=''; $('#cd-min').value='';
     $('#cd-benefit').value=''; $('#cd-memo').value='';
-    $('#cd-form').hidden=true; $('#cd-toggle').textContent='+ 새 카드 추가';
+    closeSheet('#cd-form');
     toast('카드 등록됨'); applyExtras(d);
   }catch(e){ toast('등록하지 못했습니다'); }
   $('#cd-add').disabled=false;
 };
-$('#fx-toggle').onclick=()=>{
-  const hide=!$('#fx-form').hidden;
-  $('#fx-form').hidden=hide;
-  $('#fx-toggle').textContent = hide ? '+ 새 고정지출 추가' : '취소';
-};
-$('#cd-toggle').onclick=()=>{
-  const hide=!$('#cd-form').hidden;
-  $('#cd-form').hidden=hide;
-  $('#cd-toggle').textContent = hide ? '+ 새 카드 추가' : '취소';
-};
+$('#fx-toggle').onclick=()=>openSheet('#fx-form');
+$('#fx-form-close').onclick=()=>closeSheet('#fx-form');
+$('#cd-toggle').onclick=()=>openSheet('#cd-form');
+$('#cd-form-close').onclick=()=>closeSheet('#cd-form');
 document.querySelectorAll('#mg-switch button').forEach(btn=>{
   btn.onclick=()=>{
     document.querySelectorAll('#mg-switch button').forEach(b=>b.setAttribute('aria-pressed', b===btn));
@@ -1663,7 +1731,7 @@ function renderCategories(){
       edit.onclick=()=>{
         $('#cg-id').value=c.id; $('#cg-name').value=c.name; $('#cg-kind').value=c.kind;
         $('#cg-irregular').checked=!!c.irregular;
-        $('#cg-form').hidden=false; $('#cg-toggle').textContent='취소';
+        openSheet('#cg-form');
       };
       const del=el('button','x'); del.textContent='✕';
       del.onclick=async()=>{
@@ -1678,11 +1746,10 @@ function renderCategories(){
   });
 }
 $('#cg-toggle').onclick=()=>{
-  const hide=!$('#cg-form').hidden;
-  $('#cg-form').hidden=hide;
-  if(hide){ $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출'; $('#cg-irregular').checked=false; }
-  $('#cg-toggle').textContent = hide ? '+ 새 카테고리 추가' : '취소';
+  $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출'; $('#cg-irregular').checked=false;
+  openSheet('#cg-form');
 };
+$('#cg-form-close').onclick=()=>closeSheet('#cg-form');
 $('#cg-save').onclick=async()=>{
   const id=$('#cg-id').value;
   const name=$('#cg-name').value.trim();
@@ -1693,7 +1760,7 @@ $('#cg-save').onclick=async()=>{
   try{
     const d = await call('apiSaveCategory',S.pin,{id:id||undefined, name:name, kind:kind, irregular:irregular});
     $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출'; $('#cg-irregular').checked=false;
-    $('#cg-form').hidden=true; $('#cg-toggle').textContent='+ 새 카테고리 추가';
+    closeSheet('#cg-form');
     toast('저장됨'); applyExtras(d);
   }catch(e){ toast('저장하지 못했습니다'); }
   $('#cg-save').disabled=false;
@@ -1726,7 +1793,7 @@ function renderGoals(){
     edit.onclick=()=>{
       $('#gl-id').value=g.id; $('#gl-name').value=g.name;
       $('#gl-target').value=g.target?comma(g.target):''; $('#gl-memo').value=g.memo||'';
-      $('#gl-form').hidden=false; $('#gl-toggle').textContent='취소';
+      openSheet('#gl-form');
     };
     const del=el('button','x'); del.textContent='✕';
     del.onclick=async()=>{
@@ -1748,11 +1815,10 @@ async function loadGoalProgress(){
   }catch(e){ toast('진행률을 불러오지 못했습니다'); }
 }
 $('#gl-toggle').onclick=()=>{
-  const hide=!$('#gl-form').hidden;
-  $('#gl-form').hidden=hide;
-  if(hide){ $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-memo').value=''; }
-  $('#gl-toggle').textContent = hide ? '+ 새 목표 추가' : '취소';
+  $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-memo').value='';
+  openSheet('#gl-form');
 };
+$('#gl-form-close').onclick=()=>closeSheet('#gl-form');
 $('#gl-target').addEventListener('input',e=>{
   const raw=e.target.value.replace(/[^0-9]/g,'');
   e.target.value = raw?comma(raw):'';
@@ -1767,7 +1833,7 @@ $('#gl-save').onclick=async()=>{
   try{
     const d = await call('apiSaveGoal',S.pin,{id:id||undefined, name:name, target:target, memo:memo});
     $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-memo').value='';
-    $('#gl-form').hidden=true; $('#gl-toggle').textContent='+ 새 목표 추가';
+    closeSheet('#gl-form');
     toast('저장됨'); applyExtras(d);
     loadGoalProgress();
   }catch(e){ toast('저장하지 못했습니다'); }
