@@ -1255,7 +1255,7 @@ function renderAssets(){
     };
     const x=el('button','x'); x.textContent='✕';
     x.onclick=async()=>{
-      if(!confirm(r.account+' 을(를) 이 달 목록에서 지울까요?')) return;
+      if(!confirm("'"+r.account+"' 계좌를 이 달 목록에서 지울까요?")) return;
       row.remove();
       try{ applyLoad(await call('apiDeleteAsset',S.pin,r.id,S.month)); }
       catch(e){ toast('삭제하지 못했습니다'); }
@@ -1459,7 +1459,7 @@ function renderFixed(){
     };
     const x=el('button','x'); x.textContent='✕';
     x.onclick=async()=>{
-      if(!confirm(f.item+' 을(를) 삭제할까요?')) return;
+      if(!confirm("'"+f.item+"' 항목을 삭제할까요?")) return;
       row.remove();
       try{ applyExtras(await call('apiDeleteFixed',S.pin,f.id)); }
       catch(e){ toast('삭제하지 못했습니다'); }
@@ -1516,7 +1516,7 @@ function renderCards(){
       '<div class="meta">'+(c.owner||'')+(c.memo?' · '+c.memo:'')+'</div>';
     const del=el('button','del'); del.textContent='삭제';
     del.onclick=async()=>{
-      if(!confirm(c.name+' 을(를) 삭제할까요?')) return;
+      if(!confirm("'"+c.name+"' 카드를 삭제할까요?")) return;
       box.remove();
       try{ applyExtras(await call('apiDeleteCard',S.pin,c.id)); }
       catch(e){ toast('삭제하지 못했습니다'); }
