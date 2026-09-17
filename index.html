@@ -223,6 +223,12 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .sheet-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
   display:flex;flex-direction:column;padding:18px 20px calc(28px + var(--pad))}
 .sheet-body .field:last-of-type{border-bottom:0}
+.sheet.top{z-index:61}
+
+.pagehead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.pagehead h2{margin:0}
+.gear{width:34px;height:34px;flex:none;border-radius:10px;background:var(--surface);
+  display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.0625rem}
 
 #gate{position:fixed;inset:0;background:var(--paper);z-index:20;display:flex;
   flex-direction:column;justify-content:center;padding:30px 26px;gap:10px;text-align:center}
@@ -274,45 +280,38 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   </div>
 
   <section class="screen on" id="entry">
-    <div class="launch">
-      <button class="plus" id="entry-launch" aria-label="새 거래 입력">＋</button>
-      <p>탭해서 입력하기</p>
+    <div class="amount"><b id="amt" class="zero num"><span class="won">₩</span>0</b></div>
+    <div class="kindsel" id="kindsel">
+      <button data-kind="지출" aria-pressed="true">지출</button>
+      <button data-kind="수입" aria-pressed="false">수입</button>
+      <button data-kind="저축" aria-pressed="false">저축</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="keys" id="keys"></div>
+    <div class="daterow" id="goal-row" hidden>
+      <label for="entry-goal">저축 목표</label>
+      <select id="entry-goal"></select>
+    </div>
+    <div class="daterow">
+      <label for="entry-date">날짜</label>
+      <input type="date" id="entry-date">
+      <button id="date-today" type="button">오늘</button>
+    </div>
+    <div class="commit">
+      <input id="note" placeholder="메모 (선택)" enterkeyhint="done">
+      <button id="save" disabled>기록</button>
     </div>
   </section>
 
-  <div class="sheet" id="entry-sheet">
-    <div class="sheet-head"><button id="entry-close" aria-label="닫기">‹</button><h2>입력</h2></div>
-    <div class="sheet-body">
-      <div class="amount"><b id="amt" class="zero num"><span class="won">₩</span>0</b></div>
-      <div class="kindsel" id="kindsel">
-        <button data-kind="지출" aria-pressed="true">지출</button>
-        <button data-kind="수입" aria-pressed="false">수입</button>
-        <button data-kind="저축" aria-pressed="false">저축</button>
-      </div>
-      <div class="chips" id="chips"></div>
-      <div class="keys" id="keys"></div>
-      <div class="daterow" id="goal-row" hidden>
-        <label for="entry-goal">저축 목표</label>
-        <select id="entry-goal"></select>
-      </div>
-      <div class="daterow">
-        <label for="entry-date">날짜</label>
-        <input type="date" id="entry-date">
-        <button id="date-today" type="button">오늘</button>
-      </div>
-      <div class="commit">
-        <input id="note" placeholder="메모 (선택)" enterkeyhint="done">
-        <button id="save" disabled>기록</button>
-      </div>
-    </div>
-  </div>
-
   <section class="screen" id="month">
     <div class="body">
-      <div class="monthnav">
-        <button id="m-prev" aria-label="이전 달">‹</button>
-        <b id="m-title">—</b>
-        <button id="m-next" aria-label="다음 달">›</button>
+      <div class="pagehead">
+        <div class="monthnav">
+          <button id="m-prev" aria-label="이전 달">‹</button>
+          <b id="m-title">—</b>
+          <button id="m-next" aria-label="다음 달">›</button>
+        </div>
+        <button class="gear" id="fx-sheet-open" aria-label="고정지출 관리">⚙</button>
       </div>
       <p class="big num" id="m-left">—</p>
       <p class="sub" id="m-leftsub"></p>
@@ -341,7 +340,10 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 
   <section class="screen" id="assets">
     <div class="body">
-      <h2>순자산</h2>
+      <div class="pagehead">
+        <h2>순자산</h2>
+        <button class="gear" id="asset-mgmt-open" aria-label="카드·저축목표 관리">⚙</button>
+      </div>
       <p class="big num" id="a-net">—</p>
       <p class="sub" id="a-delta"></p>
       <div class="chart" id="a-chart"></div>
@@ -390,6 +392,10 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 
   <section class="screen" id="log">
     <div class="body">
+      <div class="pagehead">
+        <h2>기록</h2>
+        <button class="gear" id="cat-sheet-open" aria-label="카테고리 관리">⚙</button>
+      </div>
       <input id="l-search" placeholder="메모·카테고리 검색"
         style="width:100%;background:var(--surface);border-radius:12px;padding:11px 14px;
         font-size:.875rem;margin-bottom:12px">
@@ -402,100 +408,102 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     </div>
   </section>
 
-  <section class="screen" id="manage">
-    <div class="body">
-      <div class="filters" id="mg-switch" style="flex-wrap:wrap">
-        <button data-sub="fixed" aria-pressed="true">고정지출</button>
-        <button data-sub="card" aria-pressed="false">카드관리</button>
-        <button data-sub="cat" aria-pressed="false">카테고리</button>
+  <!-- 고정지출 관리 (이 달 탭 ⚙에서 열림) -->
+  <div class="sheet" id="fx-sheet">
+    <div class="sheet-head"><button id="fx-sheet-close" aria-label="닫기">‹</button><h2>고정지출 관리</h2></div>
+    <div class="sheet-body">
+      <div id="fx-list"></div>
+      <button class="wide ghost" id="fx-run">오늘 날짜 기준으로 지금 확인</button>
+      <button class="wide ghost" id="fx-toggle" style="margin-top:8px">+ 새 고정지출 추가</button>
+    </div>
+  </div>
+  <div class="sheet top" id="fx-form">
+    <div class="sheet-head"><button id="fx-form-close" aria-label="닫기">‹</button><h2>고정지출 추가</h2></div>
+    <div class="sheet-body">
+      <div class="field"><label>항목</label><input id="fx-item" placeholder="예: 월세"></div>
+      <div class="field"><label>금액</label><input id="fx-amount" inputmode="numeric" placeholder="0"></div>
+      <div class="field"><label>결제일</label><input id="fx-day" inputmode="numeric" placeholder="예: 25" style="width:30%"></div>
+      <div class="field"><label>소유자</label><select id="fx-owner"></select></div>
+      <div class="field"><label>메모</label><input id="fx-memo" placeholder="선택"></div>
+      <button class="wide" id="fx-add">고정지출 추가</button>
+    </div>
+  </div>
+
+  <!-- 카드·저축목표 관리 (자산 탭 ⚙에서 열림) -->
+  <div class="sheet" id="asset-mgmt-sheet">
+    <div class="sheet-head"><button id="asset-mgmt-close" aria-label="닫기">‹</button><h2>카드·저축목표 관리</h2></div>
+    <div class="sheet-body">
+      <div class="filters" id="am-switch">
+        <button data-sub="card" aria-pressed="true">카드관리</button>
         <button data-sub="goal" aria-pressed="false">저축목표</button>
       </div>
-
-      <div id="mg-fixed">
-        <h2>등록된 고정지출</h2>
-        <div id="fx-list"></div>
-        <button class="wide ghost" id="fx-run">오늘 날짜 기준으로 지금 확인</button>
-        <button class="wide ghost" id="fx-toggle" style="margin-top:8px">+ 새 고정지출 추가</button>
-      </div>
-      <div class="sheet" id="fx-form">
-        <div class="sheet-head"><button id="fx-form-close" aria-label="닫기">‹</button><h2>고정지출 추가</h2></div>
-        <div class="sheet-body">
-          <div class="field"><label>항목</label><input id="fx-item" placeholder="예: 월세"></div>
-          <div class="field"><label>금액</label><input id="fx-amount" inputmode="numeric" placeholder="0"></div>
-          <div class="field"><label>결제일</label><input id="fx-day" inputmode="numeric" placeholder="예: 25" style="width:30%"></div>
-          <div class="field"><label>소유자</label><select id="fx-owner"></select></div>
-          <div class="field"><label>메모</label><input id="fx-memo" placeholder="선택"></div>
-          <button class="wide" id="fx-add">고정지출 추가</button>
-        </div>
-      </div>
-
-      <div id="mg-card" hidden>
+      <div id="mg-card">
         <h2>등록된 카드</h2>
         <div id="cd-list"></div>
         <button class="wide ghost" id="cd-toggle">+ 새 카드 추가</button>
       </div>
-      <div class="sheet" id="cd-form">
-        <div class="sheet-head"><button id="cd-form-close" aria-label="닫기">‹</button><h2>카드 추가</h2></div>
-        <div class="sheet-body">
-          <div class="field"><label>카드명</label><input id="cd-name" placeholder="예: OO카드"></div>
-          <div class="field"><label>목적</label><input id="cd-purpose" placeholder="예: 주유·마트"></div>
-          <div class="field"><label>전월실적</label><input id="cd-min" inputmode="numeric" placeholder="0"></div>
-          <div class="field"><label>소유자</label><select id="cd-owner"></select></div>
-          <div class="field"><label>혜택</label><input id="cd-benefit" placeholder="예: 주유 10% 할인"></div>
-          <div class="field"><label>메모</label><input id="cd-memo" placeholder="선택"></div>
-          <button class="wide" id="cd-add">카드 추가</button>
-        </div>
-      </div>
-
-      <div id="mg-cat" hidden>
-        <h2>카테고리</h2>
-        <div id="cg-list"></div>
-        <button class="wide ghost" id="cg-toggle">+ 새 카테고리 추가</button>
-      </div>
-      <div class="sheet" id="cg-form">
-        <div class="sheet-head"><button id="cg-form-close" aria-label="닫기">‹</button><h2>카테고리 추가</h2></div>
-        <div class="sheet-body">
-          <input type="hidden" id="cg-id">
-          <div class="field"><label>이름</label><input id="cg-name" placeholder="예: 병원비"></div>
-          <div class="field"><label>구분</label>
-            <select id="cg-kind">
-              <option value="지출">지출</option>
-              <option value="수입">수입</option>
-              <option value="저축">저축</option>
-            </select>
-          </div>
-          <div class="field"><label for="cg-irregular">비정기 지출</label>
-            <input type="checkbox" id="cg-irregular" style="margin-left:auto;width:20px;height:20px">
-          </div>
-          <button class="wide" id="cg-save">저장</button>
-        </div>
-      </div>
-
       <div id="mg-goal" hidden>
         <h2>저축 목표</h2>
         <div id="gl-list"></div>
         <button class="wide ghost" id="gl-toggle">+ 새 목표 추가</button>
       </div>
-      <div class="sheet" id="gl-form">
-        <div class="sheet-head"><button id="gl-form-close" aria-label="닫기">‹</button><h2>저축 목표 추가</h2></div>
-        <div class="sheet-body">
-          <input type="hidden" id="gl-id">
-          <div class="field"><label>이름</label><input id="gl-name" placeholder="예: 자동차"></div>
-          <div class="field"><label>목표금액</label><input id="gl-target" inputmode="numeric" placeholder="0"></div>
-          <div class="field"><label>메모</label><input id="gl-memo" placeholder="선택"></div>
-          <button class="wide" id="gl-save">저장</button>
-        </div>
-      </div>
-
     </div>
-  </section>
+  </div>
+  <div class="sheet top" id="cd-form">
+    <div class="sheet-head"><button id="cd-form-close" aria-label="닫기">‹</button><h2>카드 추가</h2></div>
+    <div class="sheet-body">
+      <div class="field"><label>카드명</label><input id="cd-name" placeholder="예: OO카드"></div>
+      <div class="field"><label>목적</label><input id="cd-purpose" placeholder="예: 주유·마트"></div>
+      <div class="field"><label>전월실적</label><input id="cd-min" inputmode="numeric" placeholder="0"></div>
+      <div class="field"><label>소유자</label><select id="cd-owner"></select></div>
+      <div class="field"><label>혜택</label><input id="cd-benefit" placeholder="예: 주유 10% 할인"></div>
+      <div class="field"><label>메모</label><input id="cd-memo" placeholder="선택"></div>
+      <button class="wide" id="cd-add">카드 추가</button>
+    </div>
+  </div>
+  <div class="sheet top" id="gl-form">
+    <div class="sheet-head"><button id="gl-form-close" aria-label="닫기">‹</button><h2>저축 목표 추가</h2></div>
+    <div class="sheet-body">
+      <input type="hidden" id="gl-id">
+      <div class="field"><label>이름</label><input id="gl-name" placeholder="예: 자동차"></div>
+      <div class="field"><label>목표금액</label><input id="gl-target" inputmode="numeric" placeholder="0"></div>
+      <div class="field"><label>메모</label><input id="gl-memo" placeholder="선택"></div>
+      <button class="wide" id="gl-save">저장</button>
+    </div>
+  </div>
+
+  <!-- 카테고리 관리 (기록 탭 ⚙에서 열림) -->
+  <div class="sheet" id="cat-sheet">
+    <div class="sheet-head"><button id="cat-sheet-close" aria-label="닫기">‹</button><h2>카테고리 관리</h2></div>
+    <div class="sheet-body">
+      <div id="cg-list"></div>
+      <button class="wide ghost" id="cg-toggle">+ 새 카테고리 추가</button>
+    </div>
+  </div>
+  <div class="sheet top" id="cg-form">
+    <div class="sheet-head"><button id="cg-form-close" aria-label="닫기">‹</button><h2>카테고리 추가</h2></div>
+    <div class="sheet-body">
+      <input type="hidden" id="cg-id">
+      <div class="field"><label>이름</label><input id="cg-name" placeholder="예: 병원비"></div>
+      <div class="field"><label>구분</label>
+        <select id="cg-kind">
+          <option value="지출">지출</option>
+          <option value="수입">수입</option>
+          <option value="저축">저축</option>
+        </select>
+      </div>
+      <div class="field"><label for="cg-irregular">비정기 지출</label>
+        <input type="checkbox" id="cg-irregular" style="margin-left:auto;width:20px;height:20px">
+      </div>
+      <button class="wide" id="cg-save">저장</button>
+    </div>
+  </div>
 
   <nav id="tabs">
     <button data-tab="entry"  aria-pressed="true"><span class="ic">＋</span>입력</button>
     <button data-tab="month"  aria-pressed="false"><span class="ic">◑</span>이 달</button>
     <button data-tab="assets" aria-pressed="false"><span class="ic">◈</span>자산</button>
     <button data-tab="log"    aria-pressed="false"><span class="ic">≡</span>기록</button>
-    <button data-tab="manage" aria-pressed="false"><span class="ic">⚙</span>관리</button>
   </nav>
 </div>
 
@@ -1185,8 +1193,6 @@ function paintAmount(){
 }
 $('#entry-date').value=todayStr();
 $('#date-today').onclick=()=>{ $('#entry-date').value=todayStr(); };
-$('#entry-launch').onclick=()=>openSheet('#entry-sheet');
-$('#entry-close').onclick=()=>closeSheet('#entry-sheet');
 $('#save').onclick=async()=>{
   const amount=Number(S.digits||0); if(amount<=0) return;
   if(!S.cat){ toast('카테고리를 선택하세요'); return; }
@@ -1691,17 +1697,21 @@ $('#fx-toggle').onclick=()=>openSheet('#fx-form');
 $('#fx-form-close').onclick=()=>closeSheet('#fx-form');
 $('#cd-toggle').onclick=()=>openSheet('#cd-form');
 $('#cd-form-close').onclick=()=>closeSheet('#cd-form');
-document.querySelectorAll('#mg-switch button').forEach(btn=>{
+document.querySelectorAll('#am-switch button').forEach(btn=>{
   btn.onclick=()=>{
-    document.querySelectorAll('#mg-switch button').forEach(b=>b.setAttribute('aria-pressed', b===btn));
+    document.querySelectorAll('#am-switch button').forEach(b=>b.setAttribute('aria-pressed', b===btn));
     const sub=btn.dataset.sub;
-    $('#mg-fixed').hidden = sub!=='fixed';
     $('#mg-card').hidden = sub!=='card';
-    $('#mg-cat').hidden = sub!=='cat';
     $('#mg-goal').hidden = sub!=='goal';
     if(sub==='goal') loadGoalProgress();
   };
 });
+$('#fx-sheet-open').onclick=()=>openSheet('#fx-sheet');
+$('#fx-sheet-close').onclick=()=>closeSheet('#fx-sheet');
+$('#asset-mgmt-open').onclick=()=>openSheet('#asset-mgmt-sheet');
+$('#asset-mgmt-close').onclick=()=>closeSheet('#asset-mgmt-sheet');
+$('#cat-sheet-open').onclick=()=>openSheet('#cat-sheet');
+$('#cat-sheet-close').onclick=()=>closeSheet('#cat-sheet');
 $('#year-toggle').onclick=()=>{
   const hide=!$('#mg-year').hidden;
   $('#mg-year').hidden=hide;
