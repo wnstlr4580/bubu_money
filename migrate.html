@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>데이터 이전 (1회용)</title>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+body{font-family:-apple-system,system-ui,sans-serif;max-width:560px;margin:30px auto;padding:0 16px;
+  background:#ECF0EC;color:#1B2420}
+h1{font-size:1.25rem}
+label{display:block;font-size:.875rem;color:#6E7C74;margin:14px 0 4px}
+input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #D7DFD8;font-size:.9375rem;box-sizing:border-box}
+button{margin-top:18px;width:100%;padding:14px;border-radius:12px;border:0;background:#1B2420;color:#fff;
+  font-weight:700;font-size:.9375rem}
+button:disabled{opacity:.5}
+#log{margin-top:18px;background:#fff;border-radius:12px;padding:14px;font-size:.8125rem;
+  white-space:pre-wrap;line-height:1.6;min-height:60px}
+.warn{color:#B3392C;font-size:.8125rem;margin-top:10px}
+</style>
+</head>
+<body>
+
+<h1>구글 시트 → Firebase 데이터 이전 (한 번만 실행)</h1>
+<p class="warn">주의: 이 버튼은 한 번만 눌러주세요. 두 번 누르면 데이터가 중복됩니다.
+데이터가 정상적으로 앱에 보이는 걸 확인한 뒤에는 이 파일을 저장소에서 지워도 됩니다.</p>
+
+<label>Apps Script exec 주소</label>
+<input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+
+<label>PIN</label>
+<input id="pin" placeholder="네 자리">
+
+<button id="run">이전 시작</button>
+<div id="log">여기에 진행 상황이 표시됩니다.</div>
+
+<script>
+/* ── ↓↓↓ index.html에 넣은 것과 똑같은 firebaseConfig를 여기에도 넣으세요 ↓↓↓ ── */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCfA7k0BFrONP6-c0y0D5xGPOo4nqghDK0',
+  authDomain: 'bubumoney-bc1b6.firebaseapp.com',
+  projectId: 'bubumoney-bc1b6',
+  storageBucket: 'bubumoney-bc1b6.firebasestorage.app',
+  messagingSenderId: '263250014827',
+  appId: '1:263250014827:web:a96017c1962767412b372e',
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.firestore();
+
+const logBox = document.getElementById('log');
+function log(msg){ logBox.textContent += '\n' + msg; logBox.scrollTop = logBox.scrollHeight; }
+
+/** Firestore는 배치당 최대 500건까지만 한 번에 쓸 수 있어서, 큰 목록은 나눠서 씁니다. */
+async function writeAll(collection, rows, mapFn){
+  let n = 0;
+  for (let i = 0; i < rows.length; i += 400) {
+    const chunk = rows.slice(i, i + 400);
+    const batch = db.batch();
+    chunk.forEach(r => {
+      const ref = db.collection(collection).doc();
+      batch.set(ref, mapFn ? mapFn(r) : r);
+    });
+    await batch.commit();
+    n += chunk.length;
+    log(collection + ': ' + n + ' / ' + rows.length);
+  }
+  return n;
+}
+
+document.getElementById('run').onclick = async () => {
+  const apiUrl = document.getElementById('apiUrl').value.trim();
+  const pin = document.getElementById('pin').value.trim();
+  if(!apiUrl || !pin){ log('exec 주소와 PIN을 입력하세요.'); return; }
+  document.getElementById('run').disabled = true;
+  logBox.textContent = '';
+
+  try{
+    log('로그인 중...');
+    await firebase.auth().signInAnonymously();
+
+    log('기존 데이터 확인 중...');
+    const existing = await db.collection('tx').limit(1).get();
+    if(!existing.empty){
+      if(!confirm('Firestore에 이미 거래내역이 있습니다. 그래도 계속하면 중복될 수 있습니다. 계속할까요?')){
+        log('취소했습니다.');
+        document.getElementById('run').disabled = false;
+        return;
+      }
+    }
+
+    log('구글 시트에서 데이터 내려받는 중...');
+    const res = await fetch(apiUrl, { method:'POST', body: JSON.stringify({ fn:'apiExportAll', args:[pin] }) });
+    const j = await res.json();
+    if(!j.ok) throw new Error(j.error || '내보내기 실패');
+    const d = j.result;
+    log('받아옴: 거래 ' + d.tx.length + '건, 예산 ' + d.budgets.length + '개월, 자산 ' + d.assets.length +
+        '건, 고정지출 ' + d.fixedExpenses.length + '개, 카드 ' + d.cards.length + '개, 카테고리 ' +
+        d.categories.length + '개, 정산 ' + d.settlement.length + '건');
+
+    await writeAll('tx', d.tx);
+    await writeAll('assets', d.assets);
+    await writeAll('fixed', d.fixedExpenses);
+    await writeAll('cards', d.cards);
+    await writeAll('categories', d.categories);
+    await writeAll('settlement', d.settlement);
+
+    log('예산 저장 중...');
+    for (const b of d.budgets) {
+      await db.collection('budget').doc(b.month).set({
+        fixed:b.fixed, living:b.living, allowance1:b.allowance1, allowance2:b.allowance2, goal:b.goal,
+      });
+    }
+    log('예산: ' + d.budgets.length + '개월 완료');
+
+    log('설정(PIN·이름·연봉) 저장 중...');
+    await db.collection('config').doc('main').set(d.config);
+
+    log('\n✅ 이전 완료! 이제 index.html(진짜 앱)을 열어서 데이터가 잘 보이는지 확인해보세요.');
+  }catch(e){
+    log('\n❌ 오류: ' + (e && e.message ? e.message : e));
+  }
+  document.getElementById('run').disabled = false;
+};
+</script>
+</body>
+</html>

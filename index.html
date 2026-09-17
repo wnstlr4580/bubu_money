@@ -11,6 +11,9 @@
 <meta name="theme-color" content="#ECF0EC">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <style>
 :root{
   --paper:#ECF0EC; --surface:#FFFFFF; --ink:#1B2420;
@@ -420,28 +423,420 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 <div id="toast"></div>
 
 <script>
-/* ── 서버 호출 ─────────────────────────────────── */
-/* ── ↓↓↓ 여기에 Apps Script 배포 exec 주소를 넣으세요 (배포 관리 화면에 있는 그 주소) ↓↓↓ ── */
-const API_URL = 'https://script.google.com/macros/s/AKfycbzvIKJ-DBznFlEkOthfjfM62nMMlOekz9HNTwTlekbcpmAl8IXvSkUD41nOR9bGEtUA/exec';
+/* ── Firebase 연결 ─────────────────────────────── */
+/* ── ↓↓↓ 여기에 Firebase 콘솔에서 복사한 firebaseConfig 값을 넣으세요 ↓↓↓ ── */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCfA7k0BFrONP6-c0y0D5xGPOo4nqghDK0',
+  authDomain: 'bubumoney-bc1b6.firebaseapp.com',
+  projectId: 'bubumoney-bc1b6',
+  storageBucket: 'bubumoney-bc1b6.firebasestorage.app',
+  messagingSenderId: '263250014827',
+  appId: '1:263250014827:web:a96017c1962767412b372e',
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.firestore();
+const authReady = firebase.auth().signInAnonymously()
+  .catch(e=>{ console.error('로그인 실패', e); });
 
 let busy = 0;
-function call(fn){
-  const args = [].slice.call(arguments,1);
-  busy++; paintBusy();
-  return fetch(API_URL, { method:'POST', body: JSON.stringify({ fn:fn, args:args }) })
-    .then(r=>r.json())
-    .then(j=>{
-      busy--; paintBusy();
-      if(!j.ok) throw new Error(j.error || '요청이 실패했습니다.');
-      return j.result;
-    })
-    .catch(e=>{ busy--; paintBusy(); throw e; });
-}
 function paintBusy(){
   const b=document.getElementById('busy');
   b.style.width = busy>0 ? '70%' : '0';
   if(busy===0) setTimeout(()=>{ if(busy===0) b.style.width='0'; },300);
 }
+/** google.script.run / fetch 대신, 로컬 Firestore 함수(API 객체)를 부릅니다.
+ *  함수 이름과 인자 순서는 예전 Apps Script 버전과 동일하게 맞춰서, 나머지 화면 코드는
+ *  전혀 안 건드려도 되게 했습니다. */
+async function call(fn){
+  const args = [].slice.call(arguments,1);
+  busy++; paintBusy();
+  try{
+    await authReady;
+    const impl = API[fn];
+    if(!impl) throw new Error('알 수 없는 요청입니다: '+fn);
+    const result = await impl.apply(null, args);
+    busy--; paintBusy();
+    return result;
+  }catch(e){
+    busy--; paintBusy();
+    throw e;
+  }
+}
+
+/* ── 데이터 변환 헬퍼 ──────────────────────────── */
+function docToTx_(doc){
+  const t=doc.data();
+  return { id:doc.id, date:t.date, amount:Number(t.amount)||0, kind:t.kind,
+    category:t.category, who:t.who, note:t.note||'', ym:t.ym };
+}
+function docToAsset_(doc){
+  const a=doc.data();
+  return { id:doc.id, ym:a.ym, account:a.account, kind:a.kind, balance:Number(a.balance)||0,
+    owner:a.owner||'', purpose:a.purpose||'' };
+}
+function docToFixed_(doc){
+  const f=doc.data();
+  return { id:doc.id, item:f.item, amount:Number(f.amount)||0, day:Number(f.day)||1,
+    owner:f.owner||'', memo:f.memo||'', active:f.active!==false };
+}
+function docToCard_(doc){
+  const c=doc.data();
+  return { id:doc.id, name:c.name, purpose:c.purpose||'', benefit:c.benefit||'',
+    minSpend:Number(c.minSpend)||0, owner:c.owner||'', memo:c.memo||'' };
+}
+function docToCategory_(doc){
+  const c=doc.data();
+  return { id:doc.id, name:c.name, kind:c.kind, order:Number(c.order)||0, irregular:!!c.irregular };
+}
+async function getConfig_(){
+  const snap = await db.collection('config').doc('main').get();
+  return snap.exists ? snap.data() : {};
+}
+async function checkPin_(pin){
+  const cfg = await getConfig_();
+  if(String(pin) !== String(cfg.pin||'')) throw new Error('PIN이 맞지 않습니다.');
+  return cfg;
+}
+
+/* ── API (예전 Apps Script 함수와 같은 이름·인자로 구현) ──── */
+const API = {};
+
+API.apiNames = async (pin) => {
+  const cfg = await checkPin_(pin);
+  return { ok:true, names:[cfg.name1||'나', cfg.name2||'배우자'] };
+};
+
+API.apiLoad = async (pin, month) => {
+  const cfg = await checkPin_(pin);
+  month = month || ymNow();
+  const names = [cfg.name1||'나', cfg.name2||'배우자'];
+
+  const [monthSnap, recentSnap, budgetSnap, assetSnap] = await Promise.all([
+    db.collection('tx').where('ym','==',month).get(),
+    db.collection('tx').orderBy('date','desc').limit(120).get(),
+    db.collection('budget').doc(month).get(),
+    db.collection('assets').where('ym','==',month).get(),
+  ]);
+  const tx = monthSnap.docs.map(docToTx_).sort((a,b)=> b.date.localeCompare(a.date));
+  const recent = recentSnap.docs.map(docToTx_);
+  const b = budgetSnap.exists ? budgetSnap.data() : {};
+  const budget = {
+    fixed:Number(b.fixed)||0, living:Number(b.living)||0,
+    allowance1:Number(b.allowance1)||0, allowance2:Number(b.allowance2)||0, goal:Number(b.goal)||0,
+  };
+  const assets = assetSnap.docs.map(docToAsset_);
+
+  const cutoff = shiftYm(ymNow(), -13);
+  const [histSnap, assetHistSnap] = await Promise.all([
+    db.collection('tx').where('ym','>=',cutoff).get(),
+    db.collection('assets').where('ym','>=',cutoff).get(),
+  ]);
+  const monthlyMap={};
+  histSnap.docs.forEach(doc=>{
+    const t=doc.data();
+    if(!monthlyMap[t.ym]) monthlyMap[t.ym]={income:0,expense:0};
+    if(t.kind==='수입') monthlyMap[t.ym].income += Number(t.amount)||0;
+    else if(t.kind==='지출') monthlyMap[t.ym].expense += Number(t.amount)||0;
+  });
+  const trend = Object.keys(monthlyMap).sort().slice(-12)
+    .map(m=>({ m, income:monthlyMap[m].income, expense:monthlyMap[m].expense }));
+
+  const netByMonth={};
+  assetHistSnap.docs.forEach(doc=>{
+    const a=doc.data();
+    netByMonth[a.ym] = (netByMonth[a.ym]||0) + (a.kind==='부채' ? -Number(a.balance) : Number(a.balance));
+  });
+  const series = Object.keys(netByMonth).sort().slice(-12).map(m=>({ m, v:netByMonth[m] }));
+
+  return { ok:true, month, names, tx, recent, budget, assets, series, trend };
+};
+
+API.apiLoadExtras = async (pin) => {
+  await checkPin_(pin);
+  const [fxSnap, cdSnap, catSnap] = await Promise.all([
+    db.collection('fixed').get(), db.collection('cards').get(), db.collection('categories').get(),
+  ]);
+  return {
+    ok:true,
+    fixedExpenses: fxSnap.docs.map(docToFixed_),
+    cards: cdSnap.docs.map(docToCard_),
+    categories: catSnap.docs.map(docToCategory_).sort((a,b)=>a.order-b.order),
+  };
+};
+
+API.apiSearchTx = async (pin, q) => {
+  await checkPin_(pin);
+  q = String(q||'').trim().toLowerCase();
+  if(!q) return { ok:true, tx:[] };
+  const snap = await db.collection('tx').orderBy('date','desc').limit(1000).get();
+  const out=[];
+  snap.docs.forEach(doc=>{
+    if(out.length>=200) return;
+    const t=docToTx_(doc);
+    if((t.note||'').toLowerCase().indexOf(q)>=0 || (t.category||'').toLowerCase().indexOf(q)>=0) out.push(t);
+  });
+  return { ok:true, tx:out };
+};
+
+API.apiAddTx = async (pin, t) => {
+  await checkPin_(pin);
+  if(!(Number(t.amount)>0)) throw new Error('금액을 확인하세요.');
+  if(['지출','저축','수입'].indexOf(t.kind)<0) throw new Error('구분이 올바르지 않습니다.');
+  const date = t.date || todayStr();
+  const ym = date.slice(0,7);
+  const ref = await db.collection('tx').add({
+    date, amount:Number(t.amount), kind:t.kind, category:t.category, who:t.who,
+    note:String(t.note||'').slice(0,200), ym,
+  });
+  const loaded = await API.apiLoad(pin, ym);
+  loaded.id = ref.id;
+  return loaded;
+};
+
+API.apiDeleteTx = async (pin, id, month) => {
+  await checkPin_(pin);
+  await db.collection('tx').doc(id).delete();
+  return Object.assign(await API.apiLoad(pin, month), { success:true });
+};
+
+API.apiEditTx = async (pin, id, t, month) => {
+  await checkPin_(pin);
+  if(!(Number(t.amount)>0)) throw new Error('금액을 확인하세요.');
+  const date = t.date || todayStr();
+  const ym = date.slice(0,7);
+  await db.collection('tx').doc(id).update({
+    date, amount:Number(t.amount), note:String(t.note||'').slice(0,200), ym,
+  });
+  return Object.assign(await API.apiLoad(pin, month), { success:true });
+};
+
+API.apiSaveBudget = async (pin, month, b) => {
+  await checkPin_(pin);
+  await db.collection('budget').doc(month).set({
+    fixed:Number(b.fixed)||0, living:Number(b.living)||0,
+    allowance1:Number(b.allowance1)||0, allowance2:Number(b.allowance2)||0, goal:Number(b.goal)||0,
+  }, { merge:true });
+  return API.apiLoad(pin, month);
+};
+
+API.apiSaveAsset = async (pin, a, month) => {
+  await checkPin_(pin);
+  if(a.id){
+    const patch={};
+    if(a.balance!==undefined) patch.balance=Number(a.balance)||0;
+    if(a.owner!==undefined) patch.owner=String(a.owner||'');
+    if(a.purpose!==undefined) patch.purpose=String(a.purpose||'').slice(0,60);
+    await db.collection('assets').doc(a.id).update(patch);
+    return Object.assign(await API.apiLoad(pin, month), { success:true });
+  }
+  const ASSET_KINDS=['예금','투자','연금','부동산','부채'];
+  if(ASSET_KINDS.indexOf(a.kind)<0) throw new Error('종류가 올바르지 않습니다.');
+  const dupSnap = await db.collection('assets')
+    .where('ym','==',a.ym).where('account','==',String(a.account).trim()).get();
+  if(!dupSnap.empty) return Object.assign(await API.apiLoad(pin, month), { success:false, message:'같은 이름의 계좌가 이미 있습니다.' });
+  await db.collection('assets').add({
+    ym:a.ym, account:String(a.account).trim(), kind:a.kind, balance:Number(a.balance)||0,
+    owner:String(a.owner||''), purpose:String(a.purpose||'').slice(0,60),
+  });
+  return Object.assign(await API.apiLoad(pin, month), { success:true });
+};
+
+API.apiDeleteAsset = async (pin, id, month) => {
+  await checkPin_(pin);
+  await db.collection('assets').doc(id).delete();
+  return Object.assign(await API.apiLoad(pin, month), { success:true });
+};
+
+API.apiCopyAssets = async (pin, month) => {
+  await checkPin_(pin);
+  const prev = shiftYm(month, -1);
+  const [curSnap, prevSnap] = await Promise.all([
+    db.collection('assets').where('ym','==',month).get(),
+    db.collection('assets').where('ym','==',prev).get(),
+  ]);
+  const have = curSnap.docs.map(d=>d.data().account);
+  const src = prevSnap.docs.map(d=>d.data()).filter(a=>have.indexOf(a.account)<0);
+  if(!src.length) return Object.assign(await API.apiLoad(pin, month), { success:false, message:'가져올 지난달 기록이 없습니다.' });
+  const batch = db.batch();
+  src.forEach(a=>{
+    const ref = db.collection('assets').doc();
+    batch.set(ref, { ym:month, account:a.account, kind:a.kind, balance:Number(a.balance)||0,
+      owner:a.owner||'', purpose:a.purpose||'' });
+  });
+  await batch.commit();
+  return Object.assign(await API.apiLoad(pin, month), { success:true, count:src.length });
+};
+
+API.apiSaveFixed = async (pin, f) => {
+  await checkPin_(pin);
+  const day = Math.min(Math.max(Number(f.day)||1,1),31);
+  if(f.id){
+    await db.collection('fixed').doc(f.id).update({
+      item:String(f.item||'').slice(0,60), amount:Number(f.amount)||0, day,
+      owner:String(f.owner||''), memo:String(f.memo||'').slice(0,200), active: f.active!==false,
+    });
+    return Object.assign(await API.apiLoadExtras(pin), { success:true });
+  }
+  if(!f.item || !(Number(f.amount)>0)) throw new Error('항목과 금액을 확인하세요.');
+  await db.collection('fixed').add({
+    item:String(f.item).slice(0,60), amount:Number(f.amount)||0, day,
+    owner:String(f.owner||''), memo:String(f.memo||'').slice(0,200), active:true, lastMonth:'',
+  });
+  return Object.assign(await API.apiLoadExtras(pin), { success:true });
+};
+
+API.apiDeleteFixed = async (pin, id) => {
+  await checkPin_(pin);
+  await db.collection('fixed').doc(id).delete();
+  return Object.assign(await API.apiLoadExtras(pin), { success:true });
+};
+
+/** 매일 자동 트리거 대신, 앱을 열 때마다 오늘 결제일이 된 고정지출을 확인해서 기록합니다. */
+API.apiRunFixedNow = async (pin, month) => {
+  await checkPin_(pin);
+  const now = new Date();
+  const todayDay = now.getDate();
+  const curMonth = ymNow();
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const snap = await db.collection('fixed').get();
+  let created = 0;
+  const batch = db.batch();
+  const txCol = db.collection('tx');
+  snap.docs.forEach(doc=>{
+    const f=doc.data();
+    if(!f.active || !(Number(f.amount)>0)) return;
+    if((f.lastMonth||'')===curMonth) return;
+    const dueDay = Math.min(Number(f.day)||1, lastDayOfMonth);
+    if(todayDay < dueDay) return;
+    const txRef = txCol.doc();
+    batch.set(txRef, {
+      date: todayStr(), amount:Number(f.amount), kind:'지출', category:'고정지출',
+      who:f.owner||'', note:('[자동] '+f.item+(f.memo?(' · '+f.memo):'')).slice(0,200), ym:curMonth,
+    });
+    batch.update(doc.ref, { lastMonth: curMonth });
+    created++;
+  });
+  if(created>0) await batch.commit();
+  const loaded = await API.apiLoad(pin, month);
+  const extras = await API.apiLoadExtras(pin);
+  return Object.assign(loaded, extras, { count: created });
+};
+
+API.apiSaveCard = async (pin, c) => {
+  await checkPin_(pin);
+  if(c.id){
+    await db.collection('cards').doc(c.id).update({
+      name:String(c.name||'').slice(0,40), purpose:String(c.purpose||'').slice(0,40),
+      benefit:String(c.benefit||'').slice(0,300), minSpend:Number(c.minSpend)||0,
+      owner:String(c.owner||''), memo:String(c.memo||'').slice(0,200),
+    });
+    return Object.assign(await API.apiLoadExtras(pin), { success:true });
+  }
+  if(!c.name) throw new Error('카드 이름을 입력하세요.');
+  await db.collection('cards').add({
+    name:String(c.name).slice(0,40), purpose:String(c.purpose||'').slice(0,40),
+    benefit:String(c.benefit||'').slice(0,300), minSpend:Number(c.minSpend)||0,
+    owner:String(c.owner||''), memo:String(c.memo||'').slice(0,200),
+  });
+  return Object.assign(await API.apiLoadExtras(pin), { success:true });
+};
+
+API.apiDeleteCard = async (pin, id) => {
+  await checkPin_(pin);
+  await db.collection('cards').doc(id).delete();
+  return Object.assign(await API.apiLoadExtras(pin), { success:true });
+};
+
+API.apiSaveCategory = async (pin, c) => {
+  await checkPin_(pin);
+  if(['지출','수입','저축'].indexOf(c.kind)<0) throw new Error('구분이 올바르지 않습니다.');
+  if(c.id){
+    await db.collection('categories').doc(c.id).update({
+      name:String(c.name||'').trim().slice(0,20), kind:c.kind, irregular:!!c.irregular,
+    });
+    return Object.assign(await API.apiLoadExtras(pin), { success:true });
+  }
+  if(!c.name) throw new Error('이름을 입력하세요.');
+  const dupSnap = await db.collection('categories')
+    .where('name','==',String(c.name).trim()).where('kind','==',c.kind).get();
+  if(!dupSnap.empty) return Object.assign(await API.apiLoadExtras(pin), { success:false, message:'같은 이름의 카테고리가 이미 있습니다.' });
+  const cntSnap = await db.collection('categories').where('kind','==',c.kind).get();
+  await db.collection('categories').add({
+    name:String(c.name).trim().slice(0,20), kind:c.kind, order:cntSnap.size+1, irregular:!!c.irregular,
+  });
+  return Object.assign(await API.apiLoadExtras(pin), { success:true });
+};
+
+API.apiDeleteCategory = async (pin, id) => {
+  await checkPin_(pin);
+  await db.collection('categories').doc(id).delete();
+  return Object.assign(await API.apiLoadExtras(pin), { success:true });
+};
+
+API.apiGetSettlement = async (pin, month) => {
+  const cfg = await checkPin_(pin);
+  const names=[cfg.name1||'나', cfg.name2||'배우자'];
+  const status={}; names.forEach(n=>{ status[n]={done:false, at:''}; });
+  const snap = await db.collection('settlement').where('month','==',month).get();
+  snap.docs.forEach(doc=>{
+    const s=doc.data();
+    if(status.hasOwnProperty(s.who)) status[s.who]={ done:!!s.done, at:s.at||'' };
+  });
+  return { ok:true, names, status };
+};
+
+API.apiConfirmSettlement = async (pin, month, who, done) => {
+  await checkPin_(pin);
+  const at = done ? new Date().toISOString() : '';
+  await db.collection('settlement').doc(month+'_'+who).set({ month, who, done:!!done, at }, { merge:true });
+  return API.apiGetSettlement(pin, month);
+};
+
+API.apiSaveIncome = async (pin, income1, income2) => {
+  await checkPin_(pin);
+  await db.collection('config').doc('main').set({
+    income1:Number(income1)||0, income2:Number(income2)||0,
+  }, { merge:true });
+  return { ok:true };
+};
+
+API.apiYearSummary = async (pin, year) => {
+  const cfg = await checkPin_(pin);
+  const names=[cfg.name1||'나', cfg.name2||'배우자'];
+  const income={}; income[names[0]]=Number(cfg.income1)||0; income[names[1]]=Number(cfg.income2)||0;
+
+  const [catSnap, txSnap] = await Promise.all([
+    db.collection('categories').get(),
+    db.collection('tx').where('ym','>=',year+'-01').where('ym','<=',year+'-12').get(),
+  ]);
+  const catInfo={};
+  catSnap.docs.forEach(doc=>{ const c=doc.data(); catInfo[c.name]={ kind:c.kind, irregular:!!c.irregular }; });
+
+  const spentByPerson={}; names.forEach(n=>{ spentByPerson[n]=0; });
+  const categoryMonthly={};
+  let irregularTotal=0;
+  const irregularByCategory={};
+  txSnap.docs.forEach(doc=>{
+    const t=doc.data();
+    if(t.kind!=='지출') return;
+    const amount=Number(t.amount)||0;
+    const monthIdx=Number(t.ym.slice(5,7))-1;
+    if(spentByPerson.hasOwnProperty(t.who)) spentByPerson[t.who]+=amount;
+    if(!categoryMonthly[t.category]) categoryMonthly[t.category]=new Array(12).fill(0);
+    categoryMonthly[t.category][monthIdx]+=amount;
+    const info=catInfo[t.category];
+    if(info && info.irregular){
+      irregularTotal+=amount;
+      irregularByCategory[t.category]=(irregularByCategory[t.category]||0)+amount;
+    }
+  });
+  const threshold={}; names.forEach(n=>{ threshold[n]=Math.round(income[n]*0.25); });
+
+  return {
+    ok:true, year:Number(year), names, income, spentByPerson, threshold,
+    categoryMonthly, irregularTotal, irregularByCategory,
+  };
+};
 
 const $ = s=>document.querySelector(s);
 const el=(t,c)=>{const n=document.createElement(t); if(c) n.className=c; return n;};
@@ -540,6 +935,10 @@ async function start(){
   S.month=ymNow();
   buildKeypad(); paintAmount();
   await Promise.all([load(), loadExtras()]);
+  try{
+    const r = await call('apiRunFixedNow', S.pin, S.month);
+    if(r.count>0){ applyLoad(r); applyExtras(r); }
+  }catch(e){}
 }
 
 /* ── 데이터 ────────────────────────────────────── */
