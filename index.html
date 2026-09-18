@@ -76,6 +76,7 @@ button{cursor:pointer}
 .key.sm{font-size:1.05rem;font-weight:700;color:var(--muted)}
 
 .daterow{flex:none;display:flex;align-items:center;gap:8px;padding:8px 2px 0}
+.daterow[hidden]{display:none}
 .daterow label{font-size:.8125rem;color:var(--muted);font-weight:500}
 .daterow input[type=date]{background:var(--surface);border-radius:10px;padding:8px 10px;font-size:.875rem}
 .daterow button{margin-left:auto;font-size:.8125rem;color:var(--muted);font-weight:600;
@@ -161,14 +162,15 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .row .amt{font-weight:700;font-size:.9375rem;flex:none}
 .row .amt.수입{color:var(--me)}
 .row .amt.저축{color:#2E5B7A}
-.row .edit-box{flex:1 1 100%;display:flex;flex-direction:column;gap:8px;margin-top:4px;
-  padding-top:12px;border-top:1px solid var(--line)}
+.row .edit-box{flex:1 1 100%;display:flex;flex-direction:column;gap:8px;margin-top:8px;
+  padding:12px;border-radius:12px;background:var(--surface)}
 .row .edit-box[hidden]{display:none}
-.row .edit-box input{width:100%;background:var(--surface);border-radius:10px;padding:9px 12px;font-size:.875rem}
-.row .edit-box .ef-actions{display:flex;gap:8px}
+.row .edit-box .ef-row{display:flex;gap:8px}
+.row .edit-box input{width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:.875rem;box-sizing:border-box}
+.row .edit-box .ef-actions{display:flex;gap:8px;margin-top:2px}
 .row .edit-box .ef-actions button{flex:1;padding:10px;border-radius:10px;font-weight:700;font-size:.8125rem}
 .row .edit-box .ef-save{background:var(--ink);color:#fff}
-.row .edit-box .ef-del{background:var(--surface);color:var(--over)}
+.row .edit-box .ef-del{background:#fff;color:var(--over);border:1px solid var(--line)}
 
 .empty{text-align:center;padding:52px 24px;color:var(--muted);font-size:.9375rem}
 .empty b{display:block;font-weight:600;color:var(--ink);margin-bottom:6px}
@@ -583,6 +585,13 @@ const FIREBASE_CONFIG = {
 };
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
+/* iOS Safari는 user-scalable=no만으로는 더블탭 확대를 완전히 막지 못해 별도 처리 */
+let lastTouchEnd_=0;
+document.addEventListener('touchend', e=>{
+  const now=Date.now();
+  if(now-lastTouchEnd_<=300) e.preventDefault();
+  lastTouchEnd_=now;
+}, {passive:false});
 const authReady = firebase.auth().signInAnonymously()
   .catch(e=>{ console.error('로그인 실패', e); });
 
@@ -615,7 +624,10 @@ async function call(fn){
 function docToTx_(doc){
   const t=doc.data();
   return { id:doc.id, date:t.date, amount:Number(t.amount)||0, kind:t.kind,
-    category:t.category, who:t.who, note:t.note||'', ym:t.ym };
+    category:t.category, who:t.who, note:t.note||'', ym:t.ym, createdAt:Number(t.createdAt)||0 };
+}
+function sortTx_(list){
+  return list.slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.createdAt-a.createdAt));
 }
 function docToAsset_(doc){
   const a=doc.data();
@@ -674,8 +686,8 @@ API.apiLoad = async (pin, month) => {
     db.collection('budget').doc(month).get(),
     db.collection('assets').where('ym','==',month).get(),
   ]);
-  const tx = monthSnap.docs.map(docToTx_).sort((a,b)=> b.date.localeCompare(a.date));
-  const recent = recentSnap.docs.map(docToTx_);
+  const tx = sortTx_(monthSnap.docs.map(docToTx_));
+  const recent = sortTx_(recentSnap.docs.map(docToTx_));
   const b = budgetSnap.exists ? budgetSnap.data() : {};
   const budget = {
     fixed:Number(b.fixed)||0, living:Number(b.living)||0,
@@ -735,7 +747,7 @@ API.apiSearchTx = async (pin, q) => {
     const t=docToTx_(doc);
     if((t.note||'').toLowerCase().indexOf(q)>=0 || (t.category||'').toLowerCase().indexOf(q)>=0) out.push(t);
   });
-  return { ok:true, tx:out };
+  return { ok:true, tx:sortTx_(out) };
 };
 
 API.apiAddTx = async (pin, t) => {
@@ -746,7 +758,7 @@ API.apiAddTx = async (pin, t) => {
   const ym = date.slice(0,7);
   const ref = await db.collection('tx').add({
     date, amount:Number(t.amount), kind:t.kind, category:t.category, who:t.who,
-    note:String(t.note||'').slice(0,200), ym, goalId:String(t.goalId||''),
+    note:String(t.note||'').slice(0,200), ym, goalId:String(t.goalId||''), createdAt:Date.now(),
   });
   const loaded = await API.apiLoad(pin, ym);
   loaded.id = ref.id;
@@ -1287,7 +1299,7 @@ function buildGoalRow(){
   row.hidden=false;
   const sel=$('#entry-goal');
   const prev=sel.value;
-  sel.innerHTML='<option value="">목표 없이(일반 저축)</option>'+
+  sel.innerHTML='<option value="">일반 저축</option>'+
     S.goals.map(g=>'<option value="'+g.id+'">'+g.name+'</option>').join('');
   if(prev && S.goals.some(g=>g.id===prev)) sel.value=prev;
 }
@@ -1472,11 +1484,20 @@ function renderSettle(){
   banner.textContent='✅ 이번 달 정산이 모두 완료됐어요';
 }
 async function toggleSettle(newDone){
+  const prev = S.settlement;
+  if(S.settlement && S.settlement.status[S.who]){
+    S.settlement = JSON.parse(JSON.stringify(S.settlement));
+    S.settlement.status[S.who].done = newDone;
+    renderSettle();
+  }
   try{
     S.settlement = await call('apiConfirmSettlement', S.pin, S.month, S.who, newDone);
     renderSettle();
     toast(newDone?'정산 완료로 표시했습니다':'정산 완료를 취소했습니다');
-  }catch(e){ toast('처리하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
+  }catch(e){
+    S.settlement = prev; renderSettle();
+    toast('처리하지 못했습니다'+(e&&e.message?(' — '+e.message):''));
+  }
 }
 function renderCompare(){
   const box=$('#settle-compare'); if(!box) return;
@@ -1549,7 +1570,6 @@ function renderAssets(){
     row.appendChild(inp); row.appendChild(x);
 
     const purpose=el('input','purpose');
-    purpose.placeholder='용도 (선택)';
     purpose.value=r.purpose||'';
     purpose.onblur=async()=>{
       if(purpose.value.trim()===(r.purpose||'')) return;
@@ -1673,15 +1693,16 @@ function renderLog(){
 
     items.forEach(t=>{
       const row=el('div','row');
+      const metaLine = t.note ? (t.category+' · '+t.who) : t.who;
       row.innerHTML='<span class="who'+(t.who===S.names[1]?' you':'')+'"></span>'+
         '<div class="main"><div class="t">'+(t.note||t.category)+'</div>'+
-        '<div class="m">'+t.category+' · '+t.who+'</div></div>'+
+        '<div class="m">'+metaLine+'</div></div>'+
         '<span class="amt num '+t.kind+'">'+(t.kind==='수입'?'+':'')+comma(t.amount)+'</span>';
 
       const editBox=el('div','edit-box'); editBox.hidden=true;
       editBox.innerHTML=
-        '<input type="date" class="ef-date">'+
-        '<input inputmode="numeric" class="ef-amt" placeholder="금액">'+
+        '<div class="ef-row"><input type="date" class="ef-date">'+
+        '<input inputmode="numeric" class="ef-amt" placeholder="금액"></div>'+
         '<input class="ef-note" placeholder="메모">'+
         '<div class="ef-actions"><button class="ef-save">저장</button><button class="ef-del">삭제</button></div>';
       const dateInp=editBox.querySelector('.ef-date'); dateInp.value=t.date;
