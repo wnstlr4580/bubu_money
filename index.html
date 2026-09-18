@@ -1253,12 +1253,12 @@ async function loadSettlement(){
 /** 거래·예산·자산처럼 자주 바뀌는 것만 불러옵니다 (월 이동 등 순수 조회용). */
 async function load(){
   try{ applyLoad(await call('apiLoad', S.pin, S.month)); }
-  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'); }
+  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); }
 }
 /** 카테고리·고정지출·카드처럼 자주 안 바뀌는 것만 불러옵니다 (앱을 켤 때만 호출). */
 async function loadExtras(){
   try{ applyExtras(await call('apiLoadExtras', S.pin)); }
-  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'); }
+  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); }
 }
 function sumBy(pred){ return S.tx.filter(pred).reduce((a,t)=>a+Number(t.amount),0); }
 function ownerOptions(){ return [S.names[0], S.names[1], '공동']; }
@@ -1343,7 +1343,7 @@ $('#save').onclick=async()=>{
       who:S.who, note:note, date:date, goalId:goalId});
     $('#entry-date').value=todayStr();
     applyLoad(d);
-  }catch(e){ toast('저장하지 못했습니다. 다시 시도하세요.'); }
+  }catch(e){ toast('저장하지 못했습니다. 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); }
 };
 
 /* ── 이 달 ─────────────────────────────────────── */
@@ -1448,7 +1448,7 @@ $('#b-save').onclick=async()=>{
     toast('예산 저장됨');
     if(document.activeElement) document.activeElement.blur();
     applyLoad(d);
-  }catch(e){ toast('저장하지 못했습니다'); }
+  }catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
   $('#b-save').disabled=false;
 };
 
@@ -1476,7 +1476,7 @@ async function toggleSettle(newDone){
     S.settlement = await call('apiConfirmSettlement', S.pin, S.month, S.who, newDone);
     renderSettle();
     toast(newDone?'정산 완료로 표시했습니다':'정산 완료를 취소했습니다');
-  }catch(e){ toast('처리하지 못했습니다'); }
+  }catch(e){ toast('처리하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
 }
 function renderCompare(){
   const box=$('#settle-compare'); if(!box) return;
@@ -1537,14 +1537,14 @@ function renderAssets(){
       const v=Number(inp.value.replace(/[^0-9]/g,'')||0);
       if(v===Number(r.balance)) return;
       try{ applyLoad(await call('apiSaveAsset',S.pin,{id:r.id,balance:v},S.month)); }
-      catch(e){ toast('저장하지 못했습니다'); }
+      catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
     const x=el('button','x'); x.textContent='✕';
     x.onclick=async()=>{
       if(!confirm("'"+r.account+"' 계좌를 이 달 목록에서 지울까요?")) return;
       row.remove();
       try{ applyLoad(await call('apiDeleteAsset',S.pin,r.id,S.month)); }
-      catch(e){ toast('삭제하지 못했습니다'); }
+      catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
     row.appendChild(inp); row.appendChild(x);
 
@@ -1554,7 +1554,7 @@ function renderAssets(){
     purpose.onblur=async()=>{
       if(purpose.value.trim()===(r.purpose||'')) return;
       try{ applyLoad(await call('apiSaveAsset',S.pin,{id:r.id,purpose:purpose.value.trim()},S.month)); }
-      catch(e){ toast('저장하지 못했습니다'); }
+      catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
     main.appendChild(purpose);
 
@@ -1579,7 +1579,7 @@ $('#a-add-save').onclick=async()=>{
     toast(r.success?'추가됨':r.message);
     if(r.success) closeSheet('#a-form');
     applyLoad(r);
-  }catch(e){ toast('추가하지 못했습니다'); }
+  }catch(e){ toast('추가하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
   $('#a-add-save').disabled=false;
 };
 $('#a-copy').onclick=async()=>{
@@ -1587,7 +1587,7 @@ $('#a-copy').onclick=async()=>{
     const r=await call('apiCopyAssets',S.pin,S.month);
     toast(r.success?r.count+'개 계좌를 가져왔습니다':r.message);
     applyLoad(r);
-  }catch(e){ toast('가져오지 못했습니다'); }
+  }catch(e){ toast('가져오지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
 };
 function drawChart(series){
   const box=$('#a-chart');
@@ -1696,14 +1696,14 @@ function renderLog(){
         try{
           const d = await call('apiEditTx', S.pin, t.id, {date:dateInp.value, amount:amount, note:noteInp.value.trim()}, S.month);
           toast('수정됨'); applyLoad(d);
-        }catch(err){ toast('수정하지 못했습니다'); }
+        }catch(err){ toast('수정하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
       };
       editBox.querySelector('.ef-del').onclick=async e=>{
         e.stopPropagation();
         if(!confirm('삭제할까요?')) return;
         row.remove(); toast('삭제됨');
         try{ const d = await call('apiDeleteTx',S.pin,t.id,S.month); applyLoad(d); }
-        catch(err){ toast('삭제하지 못했습니다'); }
+        catch(err){ toast('삭제하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
       };
       editBox.onclick=e=>e.stopPropagation();
       row.appendChild(editBox);
@@ -1763,7 +1763,7 @@ function renderFixed(){
       try{
         applyExtras(await call('apiSaveFixed',S.pin,{id:f.id,item:f.item,amount:f.amount,day:f.day,
           owner:f.owner,memo:f.memo,active:!f.active}));
-      }catch(err){ toast('변경하지 못했습니다'); }
+      }catch(err){ toast('변경하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
     };
     const x=el('button','x'); x.textContent='✕'; x.setAttribute('aria-label','삭제');
     x.onclick=async(e)=>{
@@ -1771,7 +1771,7 @@ function renderFixed(){
       if(!confirm("'"+f.item+"' 항목을 삭제할까요?")) return;
       row.remove();
       try{ applyExtras(await call('apiDeleteFixed',S.pin,f.id)); }
-      catch(err){ toast('삭제하지 못했습니다'); }
+      catch(err){ toast('삭제하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
     };
     actions.appendChild(tgl); actions.appendChild(x);
     row.appendChild(actions);
@@ -1805,7 +1805,7 @@ $('#fx-add').onclick=async()=>{
     $('#fx-id').value=''; $('#fx-item').value=''; $('#fx-amount').value=''; $('#fx-day').value=''; $('#fx-memo').value='';
     closeSheet('#fx-form');
     toast(id?'저장됨':'고정지출 등록됨'); applyExtras(d);
-  }catch(e){ toast('저장하지 못했습니다'); }
+  }catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
   $('#fx-add').disabled=false;
 };
 /* ── 관리: 고정저축 ────────────────────────────── */
@@ -1833,14 +1833,14 @@ function renderFixedSavings(){
       try{
         applyExtras(await call('apiSaveFixedSaving',S.pin,{id:f.id,goalId:f.goalId,amount:f.amount,day:f.day,
           owner:f.owner,memo:f.memo,active:!f.active}));
-      }catch(e){ toast('변경하지 못했습니다'); }
+      }catch(e){ toast('변경하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
     const x=el('button','x'); x.textContent='✕';
     x.onclick=async()=>{
       if(!confirm("'"+(goal?goal.name:'고정저축')+"' 항목을 삭제할까요?")) return;
       row.remove();
       try{ applyExtras(await call('apiDeleteFixedSaving',S.pin,f.id)); }
-      catch(e){ toast('삭제하지 못했습니다'); }
+      catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
     row.appendChild(amt); row.appendChild(tgl); row.appendChild(x);
     if(f.memo){
@@ -1872,7 +1872,7 @@ $('#fs-add').onclick=async()=>{
     $('#fs-amount').value=''; $('#fs-day').value=''; $('#fs-memo').value='';
     closeSheet('#fs-form');
     toast('고정저축 등록됨'); applyExtras(d);
-  }catch(e){ toast('등록하지 못했습니다'); }
+  }catch(e){ toast('등록하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
   $('#fs-add').disabled=false;
 };
 
@@ -1898,7 +1898,7 @@ function renderCards(){
       if(!confirm("'"+c.name+"' 카드를 삭제할까요?")) return;
       box.remove();
       try{ applyExtras(await call('apiDeleteCard',S.pin,c.id)); }
-      catch(e){ toast('삭제하지 못했습니다'); }
+      catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
     box.querySelector('.top').appendChild(del);
     list.appendChild(box);
@@ -1919,7 +1919,7 @@ $('#cd-add').onclick=async()=>{
     $('#cd-benefit').value=''; $('#cd-memo').value='';
     closeSheet('#cd-form');
     toast('카드 등록됨'); applyExtras(d);
-  }catch(e){ toast('등록하지 못했습니다'); }
+  }catch(e){ toast('등록하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
   $('#cd-add').disabled=false;
 };
 $('#fx-toggle').onclick=()=>openFixedForm(null);
@@ -1976,7 +1976,7 @@ function renderCategories(){
         if(!confirm(c.name+' 카테고리를 삭제할까요?\n(이미 기록된 내역은 그대로 남습니다)')) return;
         row.remove();
         try{ applyExtras(await call('apiDeleteCategory',S.pin,c.id)); }
-        catch(e){ toast('삭제하지 못했습니다'); }
+        catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
       };
       row.appendChild(edit); row.appendChild(del);
       list.appendChild(row);
@@ -2000,7 +2000,7 @@ $('#cg-save').onclick=async()=>{
     $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출'; $('#cg-irregular').checked=false;
     closeSheet('#cg-form');
     toast('저장됨'); applyExtras(d);
-  }catch(e){ toast('저장하지 못했습니다'); }
+  }catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
   $('#cg-save').disabled=false;
 };
 
@@ -2050,7 +2050,7 @@ function renderGoals(){
       if(!confirm("'"+g.name+"' 목표를 삭제할까요?\n(이미 저축한 기록은 그대로 남습니다)")) return;
       wrap.remove();
       try{ applyExtras(await call('apiDeleteGoal',S.pin,g.id)); }
-      catch(e){ toast('삭제하지 못했습니다'); }
+      catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
     btnRow.appendChild(edit); btnRow.appendChild(del);
     wrap.appendChild(btnRow);
@@ -2062,7 +2062,7 @@ async function loadGoalProgress(){
     const r = await call('apiGoalProgress', S.pin);
     S.goalProgress = r.progress||{}; S.goalRate = r.rate||{};
     renderGoals();
-  }catch(e){ toast('진행률을 불러오지 못했습니다'); }
+  }catch(e){ toast('진행률을 불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
 }
 $('#gl-toggle').onclick=()=>{
   $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-memo').value='';
@@ -2086,14 +2086,14 @@ $('#gl-save').onclick=async()=>{
     closeSheet('#gl-form');
     toast('저장됨'); applyExtras(d);
     loadGoalProgress();
-  }catch(e){ toast('저장하지 못했습니다'); }
+  }catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
   $('#gl-save').disabled=false;
 };
 
 /* ── 관리: 연간(연말정산·비정기·연간결산) ─────────── */
 async function loadYearSummary(){
   try{ S.yearSummary = await call('apiYearSummary', S.pin, S.year); renderYear(); }
-  catch(e){ toast('연간 데이터를 불러오지 못했습니다'); }
+  catch(e){ toast('연간 데이터를 불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
 }
 function renderYear(){
   const d=S.yearSummary; if(!d) return;
@@ -2158,7 +2158,7 @@ $('#income-save').onclick=async()=>{
     toast('연봉 저장됨');
     if(document.activeElement) document.activeElement.blur();
     await loadYearSummary();
-  }catch(e){ toast('저장하지 못했습니다'); }
+  }catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
   $('#income-save').disabled=false;
 };
 
