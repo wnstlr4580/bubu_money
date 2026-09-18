@@ -199,7 +199,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   background:var(--paper);max-width:90px;overflow:hidden;text-overflow:ellipsis}
 .ytable th{color:var(--muted);font-weight:600}
 
-#tabs{flex:none;display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);
+#tabs{flex:none;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);
   background:var(--paper);padding-bottom:var(--pad)}
 #tabs button{padding:11px 0 9px;font-size:.6875rem;font-weight:600;color:var(--faint)}
 #tabs button[aria-pressed="true"]{color:var(--ink)}
@@ -277,6 +277,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   <div id="strip">
     <span class="lbl">이 달 남은 예산</span>
     <span class="val num" id="strip-val">—</span>
+    <button class="gear" id="mgmt-menu-open" aria-label="관리" style="align-self:center;margin-left:8px">⚙</button>
   </div>
 
   <section class="screen on" id="entry">
@@ -305,13 +306,10 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 
   <section class="screen" id="month">
     <div class="body">
-      <div class="pagehead">
-        <div class="monthnav">
-          <button id="m-prev" aria-label="이전 달">‹</button>
-          <b id="m-title">—</b>
-          <button id="m-next" aria-label="다음 달">›</button>
-        </div>
-        <button class="gear" id="fx-sheet-open" aria-label="고정지출 관리">⚙</button>
+      <div class="monthnav">
+        <button id="m-prev" aria-label="이전 달">‹</button>
+        <b id="m-title">—</b>
+        <button id="m-next" aria-label="다음 달">›</button>
       </div>
       <p class="big num" id="m-left">—</p>
       <p class="sub" id="m-leftsub"></p>
@@ -340,10 +338,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 
   <section class="screen" id="assets">
     <div class="body">
-      <div class="pagehead">
-        <h2>순자산</h2>
-        <button class="gear" id="asset-mgmt-open" aria-label="카드·저축목표 관리">⚙</button>
-      </div>
+      <h2>순자산</h2>
       <p class="big num" id="a-net">—</p>
       <p class="sub" id="a-delta"></p>
       <div class="chart" id="a-chart"></div>
@@ -392,10 +387,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 
   <section class="screen" id="log">
     <div class="body">
-      <div class="pagehead">
-        <h2>기록</h2>
-        <button class="gear" id="cat-sheet-open" aria-label="카테고리 관리">⚙</button>
-      </div>
       <input id="l-search" placeholder="메모·카테고리 검색"
         style="width:100%;background:var(--surface);border-radius:12px;padding:11px 14px;
         font-size:.875rem;margin-bottom:12px">
@@ -496,6 +487,16 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <input type="checkbox" id="cg-irregular" style="margin-left:auto;width:20px;height:20px">
       </div>
       <button class="wide" id="cg-save">저장</button>
+    </div>
+  </div>
+
+  <!-- 관리 메뉴 (상단 ⚙에서 열림) -->
+  <div class="sheet" id="mgmt-menu">
+    <div class="sheet-head"><button id="mgmt-menu-close" aria-label="닫기">‹</button><h2>관리</h2></div>
+    <div class="sheet-body">
+      <button class="wide ghost" data-open="#fx-sheet">고정지출 관리</button>
+      <button class="wide ghost" data-open="#asset-mgmt-sheet" style="margin-top:10px">카드 · 저축목표 관리</button>
+      <button class="wide ghost" data-open="#cat-sheet" style="margin-top:10px">카테고리 관리</button>
     </div>
   </div>
 
@@ -1706,12 +1707,20 @@ document.querySelectorAll('#am-switch button').forEach(btn=>{
     if(sub==='goal') loadGoalProgress();
   };
 });
-$('#fx-sheet-open').onclick=()=>openSheet('#fx-sheet');
 $('#fx-sheet-close').onclick=()=>closeSheet('#fx-sheet');
-$('#asset-mgmt-open').onclick=()=>openSheet('#asset-mgmt-sheet');
 $('#asset-mgmt-close').onclick=()=>closeSheet('#asset-mgmt-sheet');
-$('#cat-sheet-open').onclick=()=>openSheet('#cat-sheet');
 $('#cat-sheet-close').onclick=()=>closeSheet('#cat-sheet');
+$('#mgmt-menu-open').onclick=()=>openSheet('#mgmt-menu');
+$('#mgmt-menu-close').onclick=()=>closeSheet('#mgmt-menu');
+document.querySelectorAll('#mgmt-menu [data-open]').forEach(btn=>{
+  btn.onclick=()=>{
+    const menu=$('#mgmt-menu');
+    menu.style.transition='none';
+    menu.classList.remove('open');
+    requestAnimationFrame(()=>{ menu.style.transition=''; });
+    openSheet(btn.dataset.open);
+  };
+});
 $('#year-toggle').onclick=()=>{
   const hide=!$('#mg-year').hidden;
   $('#mg-year').hidden=hide;
