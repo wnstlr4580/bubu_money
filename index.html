@@ -75,13 +75,14 @@ button{cursor:pointer}
 .key:active{background:#E3E9E4;transform:scale(.96)}
 .key.sm{font-size:1.05rem;font-weight:700;color:var(--muted)}
 
-.daterow{flex:none;display:flex;align-items:center;gap:8px;padding:8px 2px 0}
+.daterow{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 2px 0}
 .daterow[hidden]{display:none}
 .daterow select{background:var(--surface);border-radius:10px;padding:8px 10px;font-size:.8125rem;max-width:112px;flex:none}
 .daterow select[hidden]{display:none}
+.date-group{flex:none;display:flex;align-items:center;gap:6px;margin-left:auto}
 .daterow label{font-size:.8125rem;color:var(--muted);font-weight:500}
 .daterow input[type=date]{background:var(--surface);border-radius:10px;padding:8px 10px;font-size:.875rem}
-.daterow button{margin-left:auto;font-size:.8125rem;color:var(--muted);font-weight:600;
+.daterow button{font-size:.8125rem;color:var(--muted);font-weight:600;
   padding:7px 12px;border-radius:9px;background:var(--surface)}
 .commit{flex:none;display:flex;gap:8px;padding:12px 0 calc(12px + var(--pad))}
 .commit input{flex:1;min-width:0;background:var(--surface);border-radius:13px;padding:0 15px;font-size:.9375rem}
@@ -331,9 +332,11 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     <div class="keys" id="keys"></div>
     <div class="daterow">
       <select id="entry-goal" hidden></select>
-      <label for="entry-date">날짜</label>
-      <input type="date" id="entry-date">
-      <button id="date-today" type="button">오늘</button>
+      <div class="date-group">
+        <label for="entry-date">날짜</label>
+        <input type="date" id="entry-date">
+        <button id="date-today" type="button">오늘</button>
+      </div>
     </div>
     <div class="commit">
       <input id="note" placeholder="메모 (선택)" enterkeyhint="done">
