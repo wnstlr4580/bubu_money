@@ -181,6 +181,26 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .card .benefit{font-size:.8125rem;color:var(--muted);margin-top:5px}
 .card .meta{font-size:.75rem;color:var(--faint);margin-top:5px}
 
+.fx-summary{display:flex;align-items:center;justify-content:space-between;background:var(--surface);
+  border-radius:14px;padding:16px 18px;margin-bottom:14px}
+.fx-summary .lbl{font-size:.8125rem;color:var(--muted)}
+.fx-summary .lbl b{color:var(--ink);font-size:.9375rem;font-weight:800}
+.fx-summary .amt{font-size:1.0625rem;font-weight:800;color:var(--me)}
+.fxrow{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.fxrow .datebadge{flex:none;width:52px;height:52px;border-radius:50%;background:var(--paper);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.fxrow .datebadge b{font-size:.9375rem;font-weight:800;line-height:1;color:var(--ink)}
+.fxrow .datebadge .st{font-size:.625rem;font-weight:700;padding:1px 6px;border-radius:999px;
+  background:var(--surface);color:var(--muted);white-space:nowrap}
+.fxrow .datebadge .st.done{background:var(--me);color:#fff}
+.fxrow .datebadge .st.off{background:var(--surface);color:var(--faint)}
+.fxrow .content{flex:1;min-width:0;cursor:pointer}
+.fxrow .content .t{font-size:.9375rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;display:flex;align-items:center;gap:2px}
+.fxrow .content .t .chev{color:var(--faint);font-weight:400}
+.fxrow .content .amt{font-size:.8125rem;color:var(--muted);margin-top:2px}
+.fxrow .actions{flex:none;display:flex;align-items:center;gap:2px}
+
 .pill{display:inline-block;padding:6px 12px;border-radius:999px;background:var(--surface);
   font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 6px 6px 0;border:1px solid transparent}
 .pill.done{background:var(--me);color:#fff}
@@ -397,14 +417,16 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   <div class="sheet" id="fx-sheet">
     <div class="sheet-head"><button id="fx-sheet-close" aria-label="닫기">‹</button><h2>고정지출 관리</h2></div>
     <div class="sheet-body">
+      <div id="fx-summary"></div>
       <div id="fx-list"></div>
       <button class="wide ghost" id="fx-run">오늘 날짜 기준으로 지금 확인</button>
       <button class="wide ghost" id="fx-toggle" style="margin-top:8px">+ 새 고정지출 추가</button>
     </div>
   </div>
   <div class="sheet top" id="fx-form">
-    <div class="sheet-head"><button id="fx-form-close" aria-label="닫기">‹</button><h2>고정지출 추가</h2></div>
+    <div class="sheet-head"><button id="fx-form-close" aria-label="닫기">‹</button><h2 id="fx-form-title">고정지출 추가</h2></div>
     <div class="sheet-body">
+      <input type="hidden" id="fx-id">
       <div class="field"><label>항목</label><input id="fx-item" placeholder="예: 월세"></div>
       <div class="field"><label>금액</label><input id="fx-amount" inputmode="numeric" placeholder="0"></div>
       <div class="field"><label>결제일</label><input id="fx-day" inputmode="numeric" placeholder="예: 25" style="width:30%"></div>
@@ -598,7 +620,7 @@ function docToAsset_(doc){
 function docToFixed_(doc){
   const f=doc.data();
   return { id:doc.id, item:f.item, amount:Number(f.amount)||0, day:Number(f.day)||1,
-    owner:f.owner||'', memo:f.memo||'', active:f.active!==false };
+    owner:f.owner||'', memo:f.memo||'', active:f.active!==false, lastMonth:f.lastMonth||'' };
 }
 function docToCard_(doc){
   const c=doc.data();
@@ -1697,40 +1719,73 @@ function renderLog(){
 /* ── 관리: 고정지출 ────────────────────────────── */
 function renderFixed(){
   const list=$('#fx-list'); list.innerHTML='';
+  const summary=$('#fx-summary');
   if(!S.fixedExpenses.length){
+    summary.innerHTML='';
     const p=el('div','empty');
     p.innerHTML='<b>등록된 고정지출이 없습니다</b>월세, 통신비처럼 매달 같은 날 나가는 항목을 등록하면 결제일에 자동으로 기록됩니다.';
     list.appendChild(p); return;
   }
-  S.fixedExpenses.forEach(f=>{
-    const row=el('div','acct');
-    row.innerHTML='<span class="dot'+(f.active?'':' debt')+'"></span>'+
-      '<span class="nm">'+f.item+' · 매월 '+f.day+'일'+(f.owner?' · '+f.owner:'')+'</span>';
-    const amt=el('span'); amt.style.cssText='flex:none;font-weight:700;font-size:.9375rem';
-    amt.textContent=comma(f.amount);
-    const tgl=el('button','x'); tgl.textContent=f.active?'끄기':'켜기';
-    tgl.onclick=async()=>{
+  const curMonth=ymNow();
+  const doneItems=S.fixedExpenses.filter(f=>f.active && f.lastMonth===curMonth);
+  const doneSum=doneItems.reduce((a,f)=>a+f.amount,0);
+  summary.innerHTML='<div class="fx-summary"><span class="lbl">이번 달 완료 <b>'+doneItems.length+'건</b></span>'+
+    '<span class="amt">'+won(doneSum)+'</span></div>';
+
+  const sorted=S.fixedExpenses.slice().sort((a,b)=>a.day-b.day);
+  sorted.forEach(f=>{
+    const done = f.active && f.lastMonth===curMonth;
+    const stLabel = !f.active ? '꺼짐' : (done ? '완료' : '예정');
+    const row=el('div','fxrow');
+
+    const badge=el('div','datebadge');
+    badge.innerHTML='<b>'+f.day+'일</b><span class="st'+(done?' done':'')+(!f.active?' off':'')+'">'+stLabel+'</span>';
+    row.appendChild(badge);
+
+    const content=el('div','content');
+    content.innerHTML='<div class="t">'+f.item+(f.owner?' <span style="font-weight:400;color:var(--muted);font-size:.8125rem"> · '+f.owner+'</span>':'')+
+      '<span class="chev">›</span></div>'+
+      '<div class="amt">'+comma(f.amount)+'원'+(f.memo?' · '+f.memo:'')+'</div>';
+    content.onclick=()=>openFixedForm(f);
+    row.appendChild(content);
+
+    const actions=el('div','actions');
+    const tgl=el('button','x'); tgl.textContent=f.active?'⏸':'▶'; tgl.setAttribute('aria-label',f.active?'끄기':'켜기');
+    tgl.onclick=async(e)=>{
+      e.stopPropagation();
       try{
         applyExtras(await call('apiSaveFixed',S.pin,{id:f.id,item:f.item,amount:f.amount,day:f.day,
           owner:f.owner,memo:f.memo,active:!f.active}));
-      }catch(e){ toast('변경하지 못했습니다'); }
+      }catch(err){ toast('변경하지 못했습니다'); }
     };
-    const x=el('button','x'); x.textContent='✕';
-    x.onclick=async()=>{
+    const x=el('button','x'); x.textContent='✕'; x.setAttribute('aria-label','삭제');
+    x.onclick=async(e)=>{
+      e.stopPropagation();
       if(!confirm("'"+f.item+"' 항목을 삭제할까요?")) return;
       row.remove();
       try{ applyExtras(await call('apiDeleteFixed',S.pin,f.id)); }
-      catch(e){ toast('삭제하지 못했습니다'); }
+      catch(err){ toast('삭제하지 못했습니다'); }
     };
-    row.appendChild(amt); row.appendChild(tgl); row.appendChild(x);
-    if(f.memo){
-      const memo=el('span','purpose'); memo.style.background='transparent'; memo.style.padding='0';
-      memo.textContent=f.memo; row.appendChild(memo);
-    }
+    actions.appendChild(tgl); actions.appendChild(x);
+    row.appendChild(actions);
+
     list.appendChild(row);
   });
 }
+function openFixedForm(f){
+  $('#fx-id').value=f?f.id:'';
+  $('#fx-item').value=f?f.item:'';
+  $('#fx-amount').value=f?comma(f.amount):'';
+  $('#fx-day').value=f?f.day:'';
+  buildOwnerSelect($('#fx-owner'));
+  $('#fx-owner').value=f?f.owner:'';
+  $('#fx-memo').value=f?f.memo:'';
+  $('#fx-form-title').textContent=f?'고정지출 수정':'고정지출 추가';
+  $('#fx-add').textContent=f?'저장':'고정지출 추가';
+  openSheet('#fx-form');
+}
 $('#fx-add').onclick=async()=>{
+  const id=$('#fx-id').value;
   const item=$('#fx-item').value.trim();
   const amount=digitsOf('#fx-amount');
   const day=Number($('#fx-day').value)||0;
@@ -1739,11 +1794,11 @@ $('#fx-add').onclick=async()=>{
   if(!item || amount<=0 || day<1 || day>31){ toast('항목, 금액, 결제일(1~31)을 확인하세요'); return; }
   $('#fx-add').disabled=true;
   try{
-    const d = await call('apiSaveFixed',S.pin,{item:item,amount:amount,day:day,owner:owner,memo:memo});
-    $('#fx-item').value=''; $('#fx-amount').value=''; $('#fx-day').value=''; $('#fx-memo').value='';
+    const d = await call('apiSaveFixed',S.pin,{id:id||undefined,item:item,amount:amount,day:day,owner:owner,memo:memo});
+    $('#fx-id').value=''; $('#fx-item').value=''; $('#fx-amount').value=''; $('#fx-day').value=''; $('#fx-memo').value='';
     closeSheet('#fx-form');
-    toast('고정지출 등록됨'); applyExtras(d);
-  }catch(e){ toast('등록하지 못했습니다'); }
+    toast(id?'저장됨':'고정지출 등록됨'); applyExtras(d);
+  }catch(e){ toast('저장하지 못했습니다'); }
   $('#fx-add').disabled=false;
 };
 $('#fx-run').onclick=async()=>{
@@ -1870,7 +1925,7 @@ $('#cd-add').onclick=async()=>{
   }catch(e){ toast('등록하지 못했습니다'); }
   $('#cd-add').disabled=false;
 };
-$('#fx-toggle').onclick=()=>openSheet('#fx-form');
+$('#fx-toggle').onclick=()=>openFixedForm(null);
 $('#fx-form-close').onclick=()=>closeSheet('#fx-form');
 $('#cd-toggle').onclick=()=>openSheet('#cd-form');
 $('#cd-form-close').onclick=()=>closeSheet('#cd-form');
