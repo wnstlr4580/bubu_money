@@ -410,23 +410,20 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   </div>
 
   <!-- 카드·저축목표 관리 (자산 탭 ⚙에서 열림) -->
-  <div class="sheet" id="asset-mgmt-sheet">
-    <div class="sheet-head"><button id="asset-mgmt-close" aria-label="닫기">‹</button><h2>카드·저축목표 관리</h2></div>
+  <div class="sheet" id="card-sheet">
+    <div class="sheet-head"><button id="card-sheet-close" aria-label="닫기">‹</button><h2>카드관리</h2></div>
     <div class="sheet-body">
-      <div class="filters" id="am-switch">
-        <button data-sub="card" aria-pressed="true">카드관리</button>
-        <button data-sub="goal" aria-pressed="false">저축목표</button>
-      </div>
-      <div id="mg-card">
-        <h2>등록된 카드</h2>
-        <div id="cd-list"></div>
-        <button class="wide ghost" id="cd-toggle">+ 새 카드 추가</button>
-      </div>
-      <div id="mg-goal" hidden>
-        <h2>저축 목표</h2>
-        <div id="gl-list"></div>
-        <button class="wide ghost" id="gl-toggle">+ 새 목표 추가</button>
-      </div>
+      <h2>등록된 카드</h2>
+      <div id="cd-list"></div>
+      <button class="wide ghost" id="cd-toggle">+ 새 카드 추가</button>
+    </div>
+  </div>
+  <div class="sheet" id="goal-sheet">
+    <div class="sheet-head"><button id="goal-sheet-close" aria-label="닫기">‹</button><h2>저축목표</h2></div>
+    <div class="sheet-body">
+      <h2>저축 목표</h2>
+      <div id="gl-list"></div>
+      <button class="wide ghost" id="gl-toggle">+ 새 목표 추가</button>
     </div>
   </div>
   <div class="sheet top" id="cd-form">
@@ -503,7 +500,8 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     <div class="sheet-head"><button id="mgmt-menu-close" aria-label="닫기">‹</button><h2>관리</h2></div>
     <div class="sheet-body">
       <button class="wide ghost" data-open="#fx-sheet">고정지출 관리</button>
-      <button class="wide ghost" data-open="#asset-mgmt-sheet" style="margin-top:10px">카드 · 저축목표 관리</button>
+      <button class="wide ghost" data-open="#card-sheet" style="margin-top:10px">카드관리</button>
+      <button class="wide ghost" data-open="#goal-sheet" style="margin-top:10px">저축목표</button>
       <button class="wide ghost" data-open="#cat-sheet" style="margin-top:10px">카테고리 관리</button>
       <button class="wide ghost" data-open="#year-sheet" style="margin-top:10px">연말정산 · 연간결산</button>
     </div>
@@ -1717,17 +1715,9 @@ $('#fx-toggle').onclick=()=>openSheet('#fx-form');
 $('#fx-form-close').onclick=()=>closeSheet('#fx-form');
 $('#cd-toggle').onclick=()=>openSheet('#cd-form');
 $('#cd-form-close').onclick=()=>closeSheet('#cd-form');
-document.querySelectorAll('#am-switch button').forEach(btn=>{
-  btn.onclick=()=>{
-    document.querySelectorAll('#am-switch button').forEach(b=>b.setAttribute('aria-pressed', b===btn));
-    const sub=btn.dataset.sub;
-    $('#mg-card').hidden = sub!=='card';
-    $('#mg-goal').hidden = sub!=='goal';
-    if(sub==='goal') loadGoalProgress();
-  };
-});
 $('#fx-sheet-close').onclick=()=>closeSheet('#fx-sheet');
-$('#asset-mgmt-close').onclick=()=>closeSheet('#asset-mgmt-sheet');
+$('#card-sheet-close').onclick=()=>closeSheet('#card-sheet');
+$('#goal-sheet-close').onclick=()=>closeSheet('#goal-sheet');
 $('#cat-sheet-close').onclick=()=>closeSheet('#cat-sheet');
 $('#mgmt-menu-open').onclick=()=>openSheet('#mgmt-menu');
 $('#mgmt-menu-close').onclick=()=>closeSheet('#mgmt-menu');
@@ -1741,6 +1731,7 @@ document.querySelectorAll('#mgmt-menu [data-open]').forEach(btn=>{
     const target=btn.dataset.open;
     openSheet(target);
     if(target==='#year-sheet') loadYearSummary();
+    if(target==='#goal-sheet') loadGoalProgress();
   };
 });
 $('#year-sheet-close').onclick=()=>closeSheet('#year-sheet');
