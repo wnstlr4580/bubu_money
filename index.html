@@ -199,7 +199,13 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   white-space:nowrap;display:flex;align-items:center;gap:2px}
 .fxrow .content .t .chev{color:var(--faint);font-weight:400}
 .fxrow .content .amt{font-size:.8125rem;color:var(--muted);margin-top:2px}
-.fxrow .actions{flex:none;display:flex;align-items:center;gap:2px}
+.fxrow .actions{flex:none;display:flex;align-items:center;gap:10px}
+.mini-switch{position:relative;flex:none;width:34px;height:20px;border-radius:999px;
+  background:var(--line);transition:background var(--tap)}
+.mini-switch.on{background:var(--me)}
+.mini-switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;
+  border-radius:50%;background:#fff;transition:transform var(--tap);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.mini-switch.on::after{transform:translateX(14px)}
 
 .pill{display:inline-block;padding:6px 12px;border-radius:999px;background:var(--surface);
   font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 6px 6px 0;border:1px solid transparent}
@@ -419,7 +425,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     <div class="sheet-body">
       <div id="fx-summary"></div>
       <div id="fx-list"></div>
-      <button class="wide ghost" id="fx-run">오늘 날짜 기준으로 지금 확인</button>
       <button class="wide ghost" id="fx-toggle" style="margin-top:8px">+ 새 고정지출 추가</button>
     </div>
   </div>
@@ -1752,7 +1757,7 @@ function renderFixed(){
     row.appendChild(content);
 
     const actions=el('div','actions');
-    const tgl=el('button','x'); tgl.textContent=f.active?'⏸':'▶'; tgl.setAttribute('aria-label',f.active?'끄기':'켜기');
+    const tgl=el('button','mini-switch'+(f.active?' on':'')); tgl.setAttribute('aria-label',f.active?'끄기':'켜기');
     tgl.onclick=async(e)=>{
       e.stopPropagation();
       try{
@@ -1803,16 +1808,6 @@ $('#fx-add').onclick=async()=>{
   }catch(e){ toast('저장하지 못했습니다'); }
   $('#fx-add').disabled=false;
 };
-$('#fx-run').onclick=async()=>{
-  $('#fx-run').disabled=true;
-  try{
-    const r=await call('apiRunFixedNow',S.pin,S.month);
-    toast(r.count>0 ? r.count+'건 기록됨' : '오늘 처리할 항목이 없습니다');
-    applyLoad(r); applyExtras(r);
-  }catch(e){ toast('확인하지 못했습니다'); }
-  $('#fx-run').disabled=false;
-};
-
 /* ── 관리: 고정저축 ────────────────────────────── */
 function buildGoalSelect(sel){
   sel.innerHTML = S.goals.length
