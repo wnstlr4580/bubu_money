@@ -414,6 +414,26 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     </div>
   </div>
 
+  <!-- 고정저축 관리 (관리 메뉴에서 열림) -->
+  <div class="sheet" id="fs-sheet">
+    <div class="sheet-head"><button id="fs-sheet-close" aria-label="닫기">‹</button><h2>고정저축 관리</h2></div>
+    <div class="sheet-body">
+      <div id="fs-list"></div>
+      <button class="wide ghost" id="fs-toggle">+ 새 고정저축 추가</button>
+    </div>
+  </div>
+  <div class="sheet top" id="fs-form">
+    <div class="sheet-head"><button id="fs-form-close" aria-label="닫기">‹</button><h2>고정저축 추가</h2></div>
+    <div class="sheet-body">
+      <div class="field"><label>저축 목표</label><select id="fs-goal"></select></div>
+      <div class="field"><label>금액</label><input id="fs-amount" inputmode="numeric" placeholder="0"></div>
+      <div class="field"><label>결제일</label><input id="fs-day" inputmode="numeric" placeholder="예: 25" style="width:30%"></div>
+      <div class="field"><label>소유자</label><select id="fs-owner"></select></div>
+      <div class="field"><label>메모</label><input id="fs-memo" placeholder="선택"></div>
+      <button class="wide" id="fs-add">고정저축 추가</button>
+    </div>
+  </div>
+
   <!-- 카드·저축목표 관리 (자산 탭 ⚙에서 열림) -->
   <div class="sheet" id="card-sheet">
     <div class="sheet-head"><button id="card-sheet-close" aria-label="닫기">‹</button><h2>카드관리</h2></div>
@@ -505,6 +525,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     <div class="sheet-head"><button id="mgmt-menu-close" aria-label="닫기">‹</button><h2>관리</h2></div>
     <div class="sheet-body">
       <button class="wide ghost" data-open="#fx-sheet">고정지출 관리</button>
+      <button class="wide ghost" data-open="#fs-sheet" style="margin-top:10px">고정저축 관리</button>
       <button class="wide ghost" data-open="#card-sheet" style="margin-top:10px">카드관리</button>
       <button class="wide ghost" data-open="#goal-sheet" style="margin-top:10px">저축목표</button>
       <button class="wide ghost" data-open="#cat-sheet" style="margin-top:10px">카테고리 관리</button>
@@ -592,6 +613,11 @@ function docToGoal_(doc){
   const g=doc.data();
   return { id:doc.id, name:g.name, target:Number(g.target)||0, memo:g.memo||'' };
 }
+function docToFixedSaving_(doc){
+  const f=doc.data();
+  return { id:doc.id, goalId:f.goalId||'', amount:Number(f.amount)||0, day:Number(f.day)||1,
+    owner:f.owner||'', memo:f.memo||'', active:f.active!==false };
+}
 async function getConfig_(){
   const snap = await db.collection('config').doc('main').get();
   return snap.exists ? snap.data() : {};
@@ -657,9 +683,9 @@ API.apiLoad = async (pin, month) => {
 
 API.apiLoadExtras = async (pin) => {
   await checkPin_(pin);
-  const [fxSnap, cdSnap, catSnap, glSnap] = await Promise.all([
+  const [fxSnap, cdSnap, catSnap, glSnap, fsSnap] = await Promise.all([
     db.collection('fixed').get(), db.collection('cards').get(), db.collection('categories').get(),
-    db.collection('goals').get(),
+    db.collection('goals').get(), db.collection('fixedSavings').get(),
   ]);
   return {
     ok:true,
@@ -667,6 +693,7 @@ API.apiLoadExtras = async (pin) => {
     cards: cdSnap.docs.map(docToCard_),
     categories: catSnap.docs.map(docToCategory_).sort((a,b)=>a.order-b.order),
     goals: glSnap.docs.map(docToGoal_),
+    fixedSavings: fsSnap.docs.map(docToFixedSaving_),
   };
 };
 
@@ -797,18 +824,24 @@ API.apiDeleteFixed = async (pin, id) => {
   return Object.assign(await API.apiLoadExtras(pin), { success:true });
 };
 
-/** 매일 자동 트리거 대신, 앱을 열 때마다 오늘 결제일이 된 고정지출을 확인해서 기록합니다. */
+/** 매일 자동 트리거 대신, 앱을 열 때마다 오늘 결제일이 된 고정지출·고정저축을 확인해서 기록합니다. */
 API.apiRunFixedNow = async (pin, month) => {
   await checkPin_(pin);
   const now = new Date();
   const todayDay = now.getDate();
   const curMonth = ymNow();
   const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-  const snap = await db.collection('fixed').get();
+  const [fxSnap, fsSnap, glSnap] = await Promise.all([
+    db.collection('fixed').get(), db.collection('fixedSavings').get(), db.collection('goals').get(),
+  ]);
+  const goalName = {};
+  glSnap.docs.forEach(doc=>{ goalName[doc.id] = doc.data().name || ''; });
+
   let created = 0;
   const batch = db.batch();
   const txCol = db.collection('tx');
-  snap.docs.forEach(doc=>{
+
+  fxSnap.docs.forEach(doc=>{
     const f=doc.data();
     if(!f.active || !(Number(f.amount)>0)) return;
     if((f.lastMonth||'')===curMonth) return;
@@ -822,10 +855,53 @@ API.apiRunFixedNow = async (pin, month) => {
     batch.update(doc.ref, { lastMonth: curMonth });
     created++;
   });
+
+  fsSnap.docs.forEach(doc=>{
+    const f=doc.data();
+    if(!f.active || !(Number(f.amount)>0)) return;
+    if((f.lastMonth||'')===curMonth) return;
+    const dueDay = Math.min(Number(f.day)||1, lastDayOfMonth);
+    if(todayDay < dueDay) return;
+    const gName = goalName[f.goalId] || '';
+    const txRef = txCol.doc();
+    batch.set(txRef, {
+      date: todayStr(), amount:Number(f.amount), kind:'저축', category:'저축',
+      who:f.owner||'', note:('[자동] 고정저축'+(gName?(' · '+gName):'')+(f.memo?(' · '+f.memo):'')).slice(0,200),
+      ym:curMonth, goalId:f.goalId||'',
+    });
+    batch.update(doc.ref, { lastMonth: curMonth });
+    created++;
+  });
+
   if(created>0) await batch.commit();
   const loaded = await API.apiLoad(pin, month);
   const extras = await API.apiLoadExtras(pin);
   return Object.assign(loaded, extras, { count: created });
+};
+
+API.apiSaveFixedSaving = async (pin, f) => {
+  await checkPin_(pin);
+  const day = Math.min(Math.max(Number(f.day)||1,1),31);
+  if(!f.goalId) throw new Error('저축 목표를 선택하세요.');
+  if(f.id){
+    await db.collection('fixedSavings').doc(f.id).update({
+      goalId:String(f.goalId), amount:Number(f.amount)||0, day,
+      owner:String(f.owner||''), memo:String(f.memo||'').slice(0,200), active: f.active!==false,
+    });
+    return Object.assign(await API.apiLoadExtras(pin), { success:true });
+  }
+  if(!(Number(f.amount)>0)) throw new Error('금액을 확인하세요.');
+  await db.collection('fixedSavings').add({
+    goalId:String(f.goalId), amount:Number(f.amount)||0, day,
+    owner:String(f.owner||''), memo:String(f.memo||'').slice(0,200), active:true, lastMonth:'',
+  });
+  return Object.assign(await API.apiLoadExtras(pin), { success:true });
+};
+
+API.apiDeleteFixedSaving = async (pin, id) => {
+  await checkPin_(pin);
+  await db.collection('fixedSavings').doc(id).delete();
+  return Object.assign(await API.apiLoadExtras(pin), { success:true });
 };
 
 API.apiSaveCard = async (pin, c) => {
@@ -900,16 +976,25 @@ API.apiDeleteGoal = async (pin, id) => {
   return Object.assign(await API.apiLoadExtras(pin), { success:true });
 };
 
-/** 저축 목표별로 지금까지 모은 금액(전체 기간 누적)을 계산합니다. */
+/** 저축 목표별로 지금까지 모은 금액(전체 기간 누적)과, 등록된 고정저축으로부터
+ *  매달 얼마씩 쌓이는지(달성 예상 시기 계산용)를 함께 돌려줍니다. */
 API.apiGoalProgress = async (pin) => {
   await checkPin_(pin);
-  const snap = await db.collection('tx').where('kind','==','저축').get();
+  const [txSnap, fsSnap] = await Promise.all([
+    db.collection('tx').where('kind','==','저축').get(),
+    db.collection('fixedSavings').get(),
+  ]);
   const progress = {};
-  snap.docs.forEach(doc=>{
+  txSnap.docs.forEach(doc=>{
     const t=doc.data();
     if(t.goalId) progress[t.goalId] = (progress[t.goalId]||0) + (Number(t.amount)||0);
   });
-  return { ok:true, progress };
+  const rate = {};
+  fsSnap.docs.forEach(doc=>{
+    const f=doc.data();
+    if(f.active!==false && f.goalId) rate[f.goalId] = (rate[f.goalId]||0) + (Number(f.amount)||0);
+  });
+  return { ok:true, progress, rate };
 };
 
 API.apiGetSettlement = async (pin, month) => {
@@ -1023,7 +1108,7 @@ const ASSET_KINDS=['예금','투자','연금','부동산','부채'];
 
 const S={ pin:'', who:'', names:['나','배우자'], month:'',
           tx:[], recent:[], budget:null, assets:[], series:[], trend:[],
-          fixedExpenses:[], cards:[], categories:[], goals:[], goalProgress:{},
+          fixedExpenses:[], cards:[], categories:[], goals:[], goalProgress:{}, goalRate:{}, fixedSavings:[],
           entryKind:'지출', cat:'', digits:'', goal:'',
           logFilter:{kind:'all', who:'all', cat:'all', q:''}, searchResult:null,
           settlement:null, yearSummary:null, year:new Date().getFullYear() };
@@ -1130,7 +1215,7 @@ function applyLoad(d){
 }
 function applyExtras(d){
   S.fixedExpenses=d.fixedExpenses||[]; S.cards=d.cards||[]; S.categories=d.categories||[];
-  S.goals=d.goals||[];
+  S.goals=d.goals||[]; S.fixedSavings=d.fixedSavings||[];
   renderAll();
 }
 /** 이 달 정산 완료 상태만 따로 불러옵니다 (월이 바뀔 때마다 자동 호출). */
@@ -1320,7 +1405,7 @@ function drawTrend(trend){
     '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="월별 수입 지출 추이">'+bars+'</svg>'+
     '<div class="axis"><span>'+trend[0].m.slice(2)+'</span><span>'+trend[trend.length-1].m.slice(2)+'</span></div>';
 }
-['#b-fixed','#b-living','#b-allow1','#b-allow2','#b-goal','#fx-amount','#cd-min'].forEach(id=>{
+['#b-fixed','#b-living','#b-allow1','#b-allow2','#b-goal','#fx-amount','#cd-min','#fs-amount'].forEach(id=>{
   $(id).addEventListener('input',e=>{
     const raw=e.target.value.replace(/[^0-9]/g,'');
     e.target.value = raw?comma(raw):'';
@@ -1671,6 +1756,74 @@ $('#fx-run').onclick=async()=>{
   $('#fx-run').disabled=false;
 };
 
+/* ── 관리: 고정저축 ────────────────────────────── */
+function buildGoalSelect(sel){
+  sel.innerHTML = S.goals.length
+    ? S.goals.map(g=>'<option value="'+g.id+'">'+g.name+'</option>').join('')
+    : '<option value="">등록된 목표가 없습니다</option>';
+}
+function renderFixedSavings(){
+  const list=$('#fs-list'); list.innerHTML='';
+  if(!S.fixedSavings.length){
+    const p=el('div','empty');
+    p.innerHTML='<b>등록된 고정저축이 없습니다</b>저축 목표를 먼저 만든 뒤, 매달 얼마씩 자동으로 모을지 등록해보세요.';
+    list.appendChild(p); return;
+  }
+  S.fixedSavings.forEach(f=>{
+    const goal=S.goals.find(g=>g.id===f.goalId);
+    const row=el('div','acct');
+    row.innerHTML='<span class="dot'+(f.active?'':' debt')+'"></span>'+
+      '<span class="nm">'+(goal?goal.name:'(삭제된 목표)')+' · 매월 '+f.day+'일'+(f.owner?' · '+f.owner:'')+'</span>';
+    const amt=el('span'); amt.style.cssText='flex:none;font-weight:700;font-size:.9375rem';
+    amt.textContent=comma(f.amount);
+    const tgl=el('button','x'); tgl.textContent=f.active?'끄기':'켜기';
+    tgl.onclick=async()=>{
+      try{
+        applyExtras(await call('apiSaveFixedSaving',S.pin,{id:f.id,goalId:f.goalId,amount:f.amount,day:f.day,
+          owner:f.owner,memo:f.memo,active:!f.active}));
+      }catch(e){ toast('변경하지 못했습니다'); }
+    };
+    const x=el('button','x'); x.textContent='✕';
+    x.onclick=async()=>{
+      if(!confirm("'"+(goal?goal.name:'고정저축')+"' 항목을 삭제할까요?")) return;
+      row.remove();
+      try{ applyExtras(await call('apiDeleteFixedSaving',S.pin,f.id)); }
+      catch(e){ toast('삭제하지 못했습니다'); }
+    };
+    row.appendChild(amt); row.appendChild(tgl); row.appendChild(x);
+    if(f.memo){
+      const memo=el('span','purpose'); memo.style.background='transparent'; memo.style.padding='0';
+      memo.textContent=f.memo; row.appendChild(memo);
+    }
+    list.appendChild(row);
+  });
+}
+$('#fs-toggle').onclick=()=>{
+  buildGoalSelect($('#fs-goal'));
+  buildOwnerSelect($('#fs-owner'));
+  $('#fs-amount').value=''; $('#fs-day').value=''; $('#fs-memo').value='';
+  openSheet('#fs-form');
+};
+$('#fs-form-close').onclick=()=>closeSheet('#fs-form');
+$('#fs-sheet-close').onclick=()=>closeSheet('#fs-sheet');
+$('#fs-add').onclick=async()=>{
+  const goalId=$('#fs-goal').value;
+  const amount=digitsOf('#fs-amount');
+  const day=Number($('#fs-day').value)||0;
+  const owner=$('#fs-owner').value;
+  const memo=$('#fs-memo').value.trim();
+  if(!goalId){ toast('저축 목표를 먼저 만들어주세요'); return; }
+  if(amount<=0 || day<1 || day>31){ toast('금액, 결제일(1~31)을 확인하세요'); return; }
+  $('#fs-add').disabled=true;
+  try{
+    const d = await call('apiSaveFixedSaving',S.pin,{goalId:goalId,amount:amount,day:day,owner:owner,memo:memo});
+    $('#fs-amount').value=''; $('#fs-day').value=''; $('#fs-memo').value='';
+    closeSheet('#fs-form');
+    toast('고정저축 등록됨'); applyExtras(d);
+  }catch(e){ toast('등록하지 못했습니다'); }
+  $('#fs-add').disabled=false;
+};
+
 /* ── 관리: 카드 ────────────────────────────────── */
 function renderCards(){
   const list=$('#cd-list'); list.innerHTML='';
@@ -1817,6 +1970,18 @@ function renderGoals(){
       (g.target>0?' / '+comma(g.target):'')+'</em></div>'+
       '<div class="track"><div class="fill" style="width:'+(Math.min(ratio,1)*100)+'%"></div></div>';
     wrap.appendChild(bar);
+    const rate=S.goalRate[g.id]||0;
+    if(rate>0 && g.target>0){
+      const eta=el('p','sub'); eta.style.margin='6px 0 0';
+      if(saved>=g.target){
+        eta.textContent='목표를 달성했어요 🎉';
+      }else{
+        const months=Math.ceil((g.target-saved)/rate);
+        const d=new Date(); d.setMonth(d.getMonth()+months);
+        eta.textContent='매달 '+comma(rate)+'원씩 · 약 '+months+'개월 후 달성 예상 ('+d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+')';
+      }
+      wrap.appendChild(eta);
+    }
     if(g.memo){
       const memo=el('p','sub'); memo.style.margin='6px 0 0'; memo.textContent=g.memo;
       wrap.appendChild(memo);
@@ -1843,7 +2008,7 @@ function renderGoals(){
 async function loadGoalProgress(){
   try{
     const r = await call('apiGoalProgress', S.pin);
-    S.goalProgress = r.progress||{};
+    S.goalProgress = r.progress||{}; S.goalRate = r.rate||{};
     renderGoals();
   }catch(e){ toast('진행률을 불러오지 못했습니다'); }
 }
@@ -1959,7 +2124,7 @@ function renderAll(){
   renderStrip(); renderMonth(); renderAssets();
   buildLogFilters(); renderLog();
   buildOwnerSelect($('#fx-owner'), true); buildOwnerSelect($('#cd-owner'), true);
-  renderFixed(); renderCards(); renderCategories(); renderGoals();
+  renderFixed(); renderCards(); renderCategories(); renderGoals(); renderFixedSavings();
   renderSettle(); renderCompare();
 }
 
