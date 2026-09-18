@@ -180,7 +180,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .card .top .min{margin-left:auto;font-size:.8125rem;color:var(--muted)}
 .card .benefit{font-size:.8125rem;color:var(--muted);margin-top:5px}
 .card .meta{font-size:.75rem;color:var(--faint);margin-top:5px}
-.card .del{margin-top:8px;color:var(--over);font-size:.8125rem;font-weight:600}
 
 .pill{display:inline-block;padding:6px 12px;border-radius:999px;background:var(--surface);
   font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 6px 6px 0;border:1px solid transparent}
@@ -1688,14 +1687,15 @@ function renderCards(){
       '<span class="min">전월실적 '+(c.minSpend?comma(c.minSpend)+'원':'—')+'</span></div>'+
       (c.benefit?'<div class="benefit">'+c.benefit+'</div>':'')+
       '<div class="meta">'+(c.owner||'')+(c.memo?' · '+c.memo:'')+'</div>';
-    const del=el('button','del'); del.textContent='삭제';
+    const del=el('button'); del.textContent='✕'; del.setAttribute('aria-label','삭제');
+    del.style.cssText='flex:none;color:var(--faint);padding:4px 2px 4px 8px;font-size:.9375rem';
     del.onclick=async()=>{
       if(!confirm("'"+c.name+"' 카드를 삭제할까요?")) return;
       box.remove();
       try{ applyExtras(await call('apiDeleteCard',S.pin,c.id)); }
       catch(e){ toast('삭제하지 못했습니다'); }
     };
-    box.appendChild(del);
+    box.querySelector('.top').appendChild(del);
     list.appendChild(box);
   });
 }
@@ -1760,7 +1760,7 @@ function renderCategories(){
       row.innerHTML='<span class="who"></span><div class="main"><div class="t">'+c.name+
         (c.irregular?' <span style="color:var(--muted);font-weight:400;font-size:.75rem">· 비정기</span>':'')+
         '</div></div>';
-      const edit=el('button','x'); edit.textContent='수정';
+      const edit=el('button','x'); edit.textContent='✎'; edit.setAttribute('aria-label','수정');
       edit.onclick=()=>{
         $('#cg-id').value=c.id; $('#cg-name').value=c.name; $('#cg-kind').value=c.kind;
         $('#cg-irregular').checked=!!c.irregular;
@@ -1822,7 +1822,7 @@ function renderGoals(){
       wrap.appendChild(memo);
     }
     const btnRow=el('div'); btnRow.style.cssText='display:flex;gap:8px;margin-top:8px';
-    const edit=el('button','x'); edit.textContent='수정';
+    const edit=el('button','x'); edit.textContent='✎'; edit.setAttribute('aria-label','수정');
     edit.onclick=()=>{
       $('#gl-id').value=g.id; $('#gl-name').value=g.name;
       $('#gl-target').value=g.target?comma(g.target):''; $('#gl-memo').value=g.memo||'';
