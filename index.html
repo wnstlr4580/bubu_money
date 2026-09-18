@@ -183,8 +183,13 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .card .del{margin-top:8px;color:var(--over);font-size:.8125rem;font-weight:600}
 
 .pill{display:inline-block;padding:6px 12px;border-radius:999px;background:var(--surface);
-  font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 6px 6px 0}
+  font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 6px 6px 0;border:1px solid transparent}
 .pill.done{background:var(--me);color:#fff}
+.pill.mine{border-color:var(--ink);transition:transform var(--tap)}
+.pill.mine.done{border-color:var(--me)}
+.pill.mine:active{transform:scale(.96)}
+#settle-banner{margin-top:4px;padding:12px 14px;border-radius:12px;background:var(--me);
+  color:#fff;font-weight:700;font-size:.875rem}
 .cmp-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:.8125rem}
 .cmp-row.cmp-head{color:var(--muted);font-weight:600;font-size:.75rem}
 .cmp-cat{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -333,8 +338,9 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
       </div>
       <div class="editor">
         <h2>이 달 정산</h2>
+        <p class="sub" style="margin:0 0 10px">본인 이름을 탭하면 정산 완료로 표시돼요</p>
         <div id="settle-status"></div>
-        <button class="wide ghost" id="settle-toggle">이번 달 정산 완료</button>
+        <div id="settle-banner" hidden></div>
         <h2 style="margin-top:26px">카테고리별 개인 지출 비교</h2>
         <div id="settle-compare"></div>
       </div>
@@ -1340,27 +1346,27 @@ function renderSettle(){
   const box=$('#settle-status'); if(!box) return;
   const st=S.settlement;
   if(!st){ box.innerHTML=''; return; }
-  box.innerHTML = st.names.map(n=>{
+  box.innerHTML='';
+  st.names.forEach(n=>{
     const s=st.status[n]||{done:false};
-    return '<span class="pill'+(s.done?' done':'')+'">'+n+' '+(s.done?'완료':'대기')+'</span>';
-  }).join('');
-  const mine = st.status[S.who];
-  const btn=$('#settle-toggle');
-  const done = !!(mine&&mine.done);
-  btn.textContent = done ? '정산 완료 취소' : '이번 달 정산 완료';
-  btn.classList.toggle('ghost', !done);
+    const mine = n===S.who;
+    const pill = el(mine?'button':'span', 'pill'+(s.done?' done':'')+(mine?' mine':''));
+    pill.textContent = n+' '+(s.done?'완료':'대기');
+    if(mine) pill.onclick=()=>toggleSettle(!s.done);
+    box.appendChild(pill);
+  });
+  const bothDone = st.names.length>0 && st.names.every(n=>st.status[n] && st.status[n].done);
+  const banner=$('#settle-banner');
+  banner.hidden=!bothDone;
+  banner.textContent='✅ 이번 달 정산이 모두 완료됐어요';
 }
-$('#settle-toggle').onclick=async()=>{
-  const mine = S.settlement && S.settlement.status[S.who];
-  const newDone = !(mine && mine.done);
-  $('#settle-toggle').disabled=true;
+async function toggleSettle(newDone){
   try{
     S.settlement = await call('apiConfirmSettlement', S.pin, S.month, S.who, newDone);
     renderSettle();
     toast(newDone?'정산 완료로 표시했습니다':'정산 완료를 취소했습니다');
   }catch(e){ toast('처리하지 못했습니다'); }
-  $('#settle-toggle').disabled=false;
-};
+}
 function renderCompare(){
   const box=$('#settle-compare'); if(!box) return;
   const byCat={};
