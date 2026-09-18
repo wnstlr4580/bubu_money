@@ -224,6 +224,11 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   display:flex;flex-direction:column;padding:18px 20px calc(28px + var(--pad))}
 .sheet-body .field:last-of-type{border-bottom:0}
 .sheet.top{z-index:61}
+.sheet.partial{left:auto;width:72%;max-width:320px;box-shadow:-10px 0 28px rgba(20,24,20,.16)}
+
+.backdrop{position:fixed;inset:0;z-index:59;background:rgba(20,24,20,.35);
+  opacity:0;pointer-events:none;transition:opacity .28s cubic-bezier(.2,.8,.3,1)}
+.backdrop.open{opacity:1;pointer-events:auto}
 
 .pagehead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .pagehead h2{margin:0}
@@ -491,7 +496,8 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   </div>
 
   <!-- 관리 메뉴 (상단 ⚙에서 열림) -->
-  <div class="sheet" id="mgmt-menu">
+  <div class="backdrop" id="mgmt-menu-backdrop"></div>
+  <div class="sheet partial" id="mgmt-menu" data-backdrop="#mgmt-menu-backdrop">
     <div class="sheet-head"><button id="mgmt-menu-close" aria-label="닫기">‹</button><h2>관리</h2></div>
     <div class="sheet-body">
       <button class="wide ghost" data-open="#fx-sheet">고정지출 관리</button>
@@ -969,13 +975,20 @@ const $ = s=>document.querySelector(s);
 const el=(t,c)=>{const n=document.createElement(t); if(c) n.className=c; return n;};
 
 /* ── 전체화면 입력 시트 (오른쪽에서 슬라이드 + 왼쪽 가장자리 스와이프로 닫기) ── */
-function openSheet(sel){ $(sel).classList.add('open'); }
-function closeSheet(sel){ $(sel).classList.remove('open'); }
+function openSheet(sel){
+  const s=$(sel); s.classList.add('open');
+  if(s.dataset.backdrop) $(s.dataset.backdrop).classList.add('open');
+}
+function closeSheet(sel){
+  const s=$(sel); s.classList.remove('open');
+  if(s.dataset.backdrop) $(s.dataset.backdrop).classList.remove('open');
+}
 function setupSheetSwipe(sheet){
   let startX=null, startY=null, dragging=false, dx=0;
   sheet.addEventListener('touchstart', e=>{
     const t=e.touches[0];
-    if(t.clientX>28){ dragging=false; return; }
+    const edge=sheet.getBoundingClientRect().left + 28;
+    if(t.clientX>edge){ dragging=false; return; }
     startX=t.clientX; startY=t.clientY; dragging=true; dx=0;
     sheet.style.transition='none';
   }, {passive:true});
@@ -992,7 +1005,10 @@ function setupSheetSwipe(sheet){
     dragging=false;
     sheet.style.transition='';
     sheet.style.transform='';
-    if(dx > sheet.offsetWidth*0.28) sheet.classList.remove('open');
+    if(dx > sheet.offsetWidth*0.28){
+      sheet.classList.remove('open');
+      if(sheet.dataset.backdrop) $(sheet.dataset.backdrop).classList.remove('open');
+    }
   });
 }
 document.querySelectorAll('.sheet').forEach(setupSheetSwipe);
@@ -1712,11 +1728,12 @@ $('#asset-mgmt-close').onclick=()=>closeSheet('#asset-mgmt-sheet');
 $('#cat-sheet-close').onclick=()=>closeSheet('#cat-sheet');
 $('#mgmt-menu-open').onclick=()=>openSheet('#mgmt-menu');
 $('#mgmt-menu-close').onclick=()=>closeSheet('#mgmt-menu');
+$('#mgmt-menu-backdrop').onclick=()=>closeSheet('#mgmt-menu');
 document.querySelectorAll('#mgmt-menu [data-open]').forEach(btn=>{
   btn.onclick=()=>{
     const menu=$('#mgmt-menu');
     menu.style.transition='none';
-    menu.classList.remove('open');
+    closeSheet('#mgmt-menu');
     requestAnimationFrame(()=>{ menu.style.transition=''; });
     openSheet(btn.dataset.open);
   };
