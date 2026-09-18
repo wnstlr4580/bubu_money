@@ -77,6 +77,8 @@ button{cursor:pointer}
 
 .daterow{flex:none;display:flex;align-items:center;gap:8px;padding:8px 2px 0}
 .daterow[hidden]{display:none}
+.daterow select{background:var(--surface);border-radius:10px;padding:8px 10px;font-size:.8125rem;max-width:112px;flex:none}
+.daterow select[hidden]{display:none}
 .daterow label{font-size:.8125rem;color:var(--muted);font-weight:500}
 .daterow input[type=date]{background:var(--surface);border-radius:10px;padding:8px 10px;font-size:.875rem}
 .daterow button{margin-left:auto;font-size:.8125rem;color:var(--muted);font-weight:600;
@@ -145,6 +147,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .acct .purpose{flex:1 1 80px;min-width:60px;width:auto;margin-left:0;font-size:.8125rem;
   color:var(--muted);background:none;border:0;padding:0;font-weight:400;text-align:left}
 .acct .purpose::placeholder{color:var(--faint)}
+.acct .purpose-add{flex:none;font-size:.75rem;color:var(--faint);background:none;border:0;padding:2px 0}
 
 .filters{display:flex;gap:7px}
 .filters button{padding:7px 14px;border-radius:999px;background:var(--surface);
@@ -166,11 +169,12 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   padding:12px;border-radius:12px;background:var(--surface)}
 .row .edit-box[hidden]{display:none}
 .row .edit-box .ef-row{display:flex;gap:8px}
-.row .edit-box input{width:100%;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:.875rem;box-sizing:border-box}
+.row .edit-box input{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:.875rem;box-sizing:border-box}
+.row .edit-box .ef-amt{text-align:right}
 .row .edit-box .ef-actions{display:flex;gap:8px;margin-top:2px}
 .row .edit-box .ef-actions button{flex:1;padding:10px;border-radius:10px;font-weight:700;font-size:.8125rem}
 .row .edit-box .ef-save{background:var(--ink);color:#fff}
-.row .edit-box .ef-del{background:#fff;color:var(--over);border:1px solid var(--line)}
+.row .edit-box .ef-del{background:var(--surface);color:var(--over);border:1px solid var(--line)}
 
 .empty{text-align:center;padding:52px 24px;color:var(--muted);font-size:.9375rem}
 .empty b{display:block;font-weight:600;color:var(--ink);margin-bottom:6px}
@@ -326,11 +330,8 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     </div>
     <div class="chips" id="chips"></div>
     <div class="keys" id="keys"></div>
-    <div class="daterow" id="goal-row" hidden>
-      <label for="entry-goal">저축 목표</label>
-      <select id="entry-goal"></select>
-    </div>
     <div class="daterow">
+      <select id="entry-goal" hidden></select>
       <label for="entry-date">날짜</label>
       <input type="date" id="entry-date">
       <button id="date-today" type="button">오늘</button>
@@ -888,8 +889,8 @@ API.apiRunFixedNow = async (pin, month) => {
     if(todayDay < dueDay) return;
     const txRef = txCol.doc();
     batch.set(txRef, {
-      date: todayStr(), amount:Number(f.amount), kind:'지출', category:'고정지출',
-      who:f.owner||'', note:('[자동] '+f.item+(f.memo?(' · '+f.memo):'')).slice(0,200), ym:curMonth,
+      date: curMonth+'-'+String(dueDay).padStart(2,'0'), amount:Number(f.amount), kind:'지출', category:'고정지출',
+      who:f.owner||'', note:('[자동] '+f.item+(f.memo?(' · '+f.memo):'')).slice(0,200), ym:curMonth, createdAt:Date.now(),
     });
     batch.update(doc.ref, { lastMonth: curMonth });
     created++;
@@ -904,9 +905,9 @@ API.apiRunFixedNow = async (pin, month) => {
     const gName = goalName[f.goalId] || '';
     const txRef = txCol.doc();
     batch.set(txRef, {
-      date: todayStr(), amount:Number(f.amount), kind:'저축', category:'저축',
+      date: curMonth+'-'+String(dueDay).padStart(2,'0'), amount:Number(f.amount), kind:'저축', category:'저축',
       who:f.owner||'', note:('[자동] 고정저축'+(gName?(' · '+gName):'')+(f.memo?(' · '+f.memo):'')).slice(0,200),
-      ym:curMonth, goalId:f.goalId||'',
+      ym:curMonth, goalId:f.goalId||'', createdAt:Date.now(),
     });
     batch.update(doc.ref, { lastMonth: curMonth });
     created++;
@@ -1052,7 +1053,9 @@ API.apiConfirmSettlement = async (pin, month, who, done) => {
   await checkPin_(pin);
   const at = done ? new Date().toISOString() : '';
   await db.collection('settlement').doc(month+'_'+who).set({ month, who, done:!!done, at }, { merge:true });
-  return API.apiGetSettlement(pin, month);
+  const result = await API.apiGetSettlement(pin, month);
+  if(result.status[who]) result.status[who] = { done:!!done, at };
+  return result;
 };
 
 API.apiSaveIncome = async (pin, income1, income2) => {
@@ -1294,10 +1297,9 @@ document.querySelectorAll('#kindsel button').forEach(btn=>{
   };
 });
 function buildGoalRow(){
-  const row=$('#goal-row');
-  if(S.entryKind!=='저축' || !S.goals.length){ row.hidden=true; return; }
-  row.hidden=false;
   const sel=$('#entry-goal');
+  if(S.entryKind!=='저축' || !S.goals.length){ sel.hidden=true; return; }
+  sel.hidden=false;
   const prev=sel.value;
   sel.innerHTML='<option value="">일반 저축</option>'+
     S.goals.map(g=>'<option value="'+g.id+'">'+g.name+'</option>').join('');
@@ -1569,14 +1571,29 @@ function renderAssets(){
     };
     row.appendChild(inp); row.appendChild(x);
 
-    const purpose=el('input','purpose');
-    purpose.value=r.purpose||'';
-    purpose.onblur=async()=>{
-      if(purpose.value.trim()===(r.purpose||'')) return;
-      try{ applyLoad(await call('apiSaveAsset',S.pin,{id:r.id,purpose:purpose.value.trim()},S.month)); }
-      catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
-    };
-    main.appendChild(purpose);
+    if(r.purpose){
+      const purpose=el('input','purpose');
+      purpose.value=r.purpose;
+      purpose.onblur=async()=>{
+        if(purpose.value.trim()===(r.purpose||'')) return;
+        try{ applyLoad(await call('apiSaveAsset',S.pin,{id:r.id,purpose:purpose.value.trim()},S.month)); }
+        catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
+      };
+      main.appendChild(purpose);
+    } else {
+      const addBtn=el('button','purpose-add'); addBtn.type='button'; addBtn.textContent='+ 용도';
+      addBtn.onclick=()=>{
+        const purpose=el('input','purpose'); purpose.placeholder='용도';
+        purpose.onblur=async()=>{
+          const v=purpose.value.trim();
+          if(!v){ renderAssets(); return; }
+          try{ applyLoad(await call('apiSaveAsset',S.pin,{id:r.id,purpose:v},S.month)); }
+          catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
+        };
+        addBtn.replaceWith(purpose); purpose.focus();
+      };
+      main.appendChild(addBtn);
+    }
 
     list.appendChild(row);
   });
