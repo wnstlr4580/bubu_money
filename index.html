@@ -1728,8 +1728,10 @@ function renderFixed(){
   }
   const curMonth=ymNow();
   const doneItems=S.fixedExpenses.filter(f=>f.active && f.lastMonth===curMonth);
+  const pendingItems=S.fixedExpenses.filter(f=>f.active && f.lastMonth!==curMonth);
   const doneSum=doneItems.reduce((a,f)=>a+f.amount,0);
-  summary.innerHTML='<div class="fx-summary"><span class="lbl">이번 달 완료 <b>'+doneItems.length+'건</b></span>'+
+  summary.innerHTML='<div class="fx-summary"><span class="lbl">이번 달 완료 <b>'+doneItems.length+'건</b>'+
+    ' · 예정 <b>'+pendingItems.length+'건</b></span>'+
     '<span class="amt">'+won(doneSum)+'</span></div>';
 
   const sorted=S.fixedExpenses.slice().sort((a,b)=>a.day-b.day);
