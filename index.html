@@ -371,22 +371,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
           <button class="wide" id="a-add-save">계좌 추가</button>
         </div>
       </div>
-      <div class="editor">
-        <button class="wide ghost" id="year-toggle">연말정산 · 연간 결산 보기</button>
-        <div id="mg-year" hidden style="margin-top:18px">
-          <h2>연말정산 카드 계산기</h2>
-          <div class="field"><label id="inc1-lbl">연봉</label><input id="income1" inputmode="numeric" placeholder="0"></div>
-          <div class="field"><label id="inc2-lbl">연봉</label><input id="income2" inputmode="numeric" placeholder="0"></div>
-          <button class="wide ghost" id="income-save">연봉 저장</button>
-          <div id="tax-result" style="margin-top:16px"></div>
-
-          <h2 style="margin-top:26px">비정기 지출 (올해)</h2>
-          <div id="irregular-box"></div>
-
-          <h2 style="margin-top:26px">연간 결산</h2>
-          <div class="ytable-wrap" id="year-table"></div>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -495,6 +479,24 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     </div>
   </div>
 
+  <!-- 연말정산·연간결산 (관리 메뉴에서 열림) -->
+  <div class="sheet" id="year-sheet">
+    <div class="sheet-head"><button id="year-sheet-close" aria-label="닫기">‹</button><h2>연말정산 · 연간결산</h2></div>
+    <div class="sheet-body">
+      <h2>연말정산 카드 계산기</h2>
+      <div class="field"><label id="inc1-lbl">연봉</label><input id="income1" inputmode="numeric" placeholder="0"></div>
+      <div class="field"><label id="inc2-lbl">연봉</label><input id="income2" inputmode="numeric" placeholder="0"></div>
+      <button class="wide ghost" id="income-save">연봉 저장</button>
+      <div id="tax-result" style="margin-top:16px"></div>
+
+      <h2 style="margin-top:26px">비정기 지출 (올해)</h2>
+      <div id="irregular-box"></div>
+
+      <h2 style="margin-top:26px">연간 결산</h2>
+      <div class="ytable-wrap" id="year-table"></div>
+    </div>
+  </div>
+
   <!-- 관리 메뉴 (상단 ⚙에서 열림) -->
   <div class="backdrop" id="mgmt-menu-backdrop"></div>
   <div class="sheet partial" id="mgmt-menu" data-backdrop="#mgmt-menu-backdrop">
@@ -503,6 +505,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
       <button class="wide ghost" data-open="#fx-sheet">고정지출 관리</button>
       <button class="wide ghost" data-open="#asset-mgmt-sheet" style="margin-top:10px">카드 · 저축목표 관리</button>
       <button class="wide ghost" data-open="#cat-sheet" style="margin-top:10px">카테고리 관리</button>
+      <button class="wide ghost" data-open="#year-sheet" style="margin-top:10px">연말정산 · 연간결산</button>
     </div>
   </div>
 
@@ -1735,15 +1738,12 @@ document.querySelectorAll('#mgmt-menu [data-open]').forEach(btn=>{
     menu.style.transition='none';
     closeSheet('#mgmt-menu');
     requestAnimationFrame(()=>{ menu.style.transition=''; });
-    openSheet(btn.dataset.open);
+    const target=btn.dataset.open;
+    openSheet(target);
+    if(target==='#year-sheet') loadYearSummary();
   };
 });
-$('#year-toggle').onclick=()=>{
-  const hide=!$('#mg-year').hidden;
-  $('#mg-year').hidden=hide;
-  $('#year-toggle').textContent = hide ? '연말정산 · 연간 결산 보기' : '접기';
-  if(!hide) loadYearSummary();
-};
+$('#year-sheet-close').onclick=()=>closeSheet('#year-sheet');
 
 /* ── 관리: 카테고리 ────────────────────────────── */
 function renderCategories(){
