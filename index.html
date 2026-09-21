@@ -22,7 +22,7 @@
   --tap:.08s cubic-bezier(.2,.8,.3,1);
   --pad:env(safe-area-inset-bottom,0px);
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{margin:0;height:100%;overflow:hidden}
 body{
   background:var(--paper);color:var(--ink);
@@ -588,13 +588,6 @@ const FIREBASE_CONFIG = {
 };
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
-/* iOS Safari는 user-scalable=no만으로는 더블탭 확대를 완전히 막지 못해 별도 처리 */
-let lastTouchEnd_=0;
-document.addEventListener('touchend', e=>{
-  const now=Date.now();
-  if(now-lastTouchEnd_<=300) e.preventDefault();
-  lastTouchEnd_=now;
-}, {passive:false});
 const authReady = firebase.auth().signInAnonymously()
   .catch(e=>{ console.error('로그인 실패', e); });
 
