@@ -275,15 +275,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   flex-direction:column;justify-content:center;padding:30px 26px;gap:10px;text-align:center}
 #gate h1{font-size:1.4rem;font-weight:800;letter-spacing:-.03em;margin:0}
 #gate p{color:var(--muted);font-size:.9375rem;margin:2px 0 18px}
-#gate .dots{display:flex;justify-content:center;gap:13px;margin-bottom:20px;height:14px}
-#gate .dots i{width:12px;height:12px;border-radius:50%;background:#DCE3DD}
-#gate .dots i.f{background:var(--ink)}
-#gate .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;max-width:300px;
-  margin:0 auto;width:100%}
-#gate .pad button{padding:15px 0;border-radius:14px;background:var(--surface);
-  font-size:1.4rem;font-weight:600}
-#gate .pad button:active{background:#E3E9E4}
-#gate .pad button.sm{font-size:1rem;font-weight:700;color:var(--muted)}
 #gate .who{display:flex;gap:9px;max-width:300px;margin:0 auto;width:100%}
 #gate .who button{flex:1;padding:15px;border-radius:14px;background:var(--surface);font-weight:700}
 #gate .who button.me{color:var(--me)} #gate .who button.you{color:var(--you)}
@@ -294,8 +285,14 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
   z-index:30;white-space:nowrap;max-width:90vw}
 #toast.on{opacity:1;transform:translate(-50%,0)}
-#busy{position:fixed;top:0;left:0;height:2px;width:0;background:var(--me);
-  transition:width .3s;z-index:40}
+#busy{position:fixed;top:0;left:0;height:3px;width:0;background:var(--me);
+  box-shadow:0 0 6px var(--me);transition:width .3s;z-index:40}
+#boot-loading{position:fixed;inset:0;background:var(--paper);z-index:15;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+#boot-loading .spinner{width:28px;height:28px;border-radius:50%;
+  border:3px solid var(--line);border-top-color:var(--me);animation:spin .7s linear infinite}
+#boot-loading p{color:var(--muted);font-size:.875rem}
+@keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 :focus-visible{outline:2px solid var(--me);outline-offset:2px}
 #gate[hidden],#app[hidden]{display:none!important}
@@ -307,12 +304,12 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 
 <div id="gate">
   <h1>우리집 가계</h1>
-  <p id="g-sub">PIN 네 자리를 입력하세요</p>
-  <div class="dots" id="g-dots"><i></i><i></i><i></i><i></i></div>
-  <div class="pad" id="g-pad"></div>
+  <p id="g-sub">누구세요?</p>
   <div class="who" id="g-who" hidden></div>
   <p class="err" id="g-err"></p>
 </div>
+
+<div id="boot-loading" hidden><span class="spinner"></span><p>불러오는 중…</p></div>
 
 <div id="app" hidden>
   <div id="strip">
@@ -657,10 +654,8 @@ async function getConfig_(){
   const snap = await db.collection('config').doc('main').get();
   return snap.exists ? snap.data() : {};
 }
-async function checkPin_(pin){
-  const cfg = await getConfig_();
-  if(String(pin) !== String(cfg.pin||'')) throw new Error('PIN이 맞지 않습니다.');
-  return cfg;
+async function checkPin_(){
+  return await getConfig_();
 }
 
 /* ── API (예전 Apps Script 함수와 같은 이름·인자로 구현) ──── */
@@ -1173,7 +1168,6 @@ function toast(msg){
 }
 
 /* ── 잠금 화면 ─────────────────────────────────── */
-let pinBuf='';
 /** 사파리(특히 구글 샌드박스 iframe 안)는 localStorage를 자꾸 비우기 때문에,
  *  실제 사용자 터치(제스처) 순간에 저장 공간 접근을 명시적으로 요청해서 최대한 붙잡아둡니다. */
 function ensureStorageAccess(){
@@ -1185,44 +1179,19 @@ function ensureStorageAccess(){
     }
   }catch(e){}
 }
-function buildPinPad(){
-  const p=$('#g-pad'); p.innerHTML='';
-  ['1','2','3','4','5','6','7','8','9','','0','⌫'].forEach(k=>{
-    if(k===''){ p.appendChild(el('span')); return; }
-    const b=el('button', k==='⌫'?'sm':'');
-    b.textContent=k;
-    b.onclick=()=>{
-      ensureStorageAccess();
-      if(k==='⌫') pinBuf=pinBuf.slice(0,-1);
-      else if(pinBuf.length<4) pinBuf+=k;
-      paintDots();
-      if(pinBuf.length===4) tryPin(pinBuf);
-    };
-    p.appendChild(b);
-  });
-}
-function paintDots(){
-  $('#g-dots').querySelectorAll('i').forEach((d,i)=>
-    d.classList.toggle('f', i<pinBuf.length));
-}
-async function tryPin(pin){
-  $('#g-err').textContent='';
+async function boot(){
+  $('#gate').hidden=false;
   try{
-    const r = await call('apiNames', pin);
-    S.pin=pin; S.names=r.names; store.set('pin',pin);
+    const r = await call('apiNames', S.pin);
+    S.names=r.names;
     askWho();
   }catch(e){
-    pinBuf=''; paintDots();
-    $('#gate').hidden=false;
-    $('#g-err').textContent='PIN이 맞지 않습니다.';
+    $('#g-err').textContent='불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'');
   }
 }
 function askWho(){
   const savedIdx=store.get('whoIdx');
   if(savedIdx!==null && S.names[Number(savedIdx)]){ S.who=S.names[Number(savedIdx)]; start(); return; }
-  $('#gate').hidden=false;
-  $('#g-sub').textContent='누구세요?';
-  $('#g-dots').hidden=true; $('#g-pad').hidden=true;
   const w=$('#g-who'); w.hidden=false; w.innerHTML='';
   S.names.forEach((n,i)=>{
     const b=el('button', i===0?'me':'you'); b.textContent=n;
@@ -1232,13 +1201,18 @@ function askWho(){
 }
 async function start(){
   $('#gate').hidden=true; $('#app').hidden=false;
+  $('#boot-loading').hidden=false;
   S.month=ymNow();
   buildKeypad(); paintAmount();
-  await Promise.all([load(), loadExtras()]);
   try{
-    const r = await call('apiRunFixedNow', S.pin, S.month);
-    if(r.count>0){ applyLoad(r); applyExtras(r); }
-  }catch(e){}
+    await Promise.all([load(), loadExtras()]);
+    try{
+      const r = await call('apiRunFixedNow', S.pin, S.month);
+      if(r.count>0){ applyLoad(r); applyExtras(r); }
+    }catch(e){}
+  }finally{
+    $('#boot-loading').hidden=true;
+  }
 }
 
 /* ── 데이터 ────────────────────────────────────── */
@@ -2209,12 +2183,7 @@ document.querySelectorAll('#tabs button').forEach(btn=>{
 });
 
 /* 부팅 */
-buildPinPad();
-(function(){
-  const saved=store.get('pin');
-  if(saved && store.get('whoIdx')!==null){ $('#gate').hidden=true; }
-  if(saved) tryPin(saved);
-})();
+boot();
 </script>
 </body>
 </html>
