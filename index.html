@@ -389,7 +389,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <div class="field"><label id="b-allow2-lbl">용돈2</label><input id="b-allow2" inputmode="numeric" placeholder="0"></div>
         <p class="sub" style="margin:-8px 0 14px">용돈은 내역을 따로 기록하지 않고, 정한 금액을 지급 즉시 전액 사용한 것으로 처리해요.</p>
         <div class="field"><label>저축 목표</label><input id="b-goal" inputmode="numeric" placeholder="0"></div>
-        <button class="wide" id="b-save">예산 저장</button>
       </div>
       <div class="editor">
         <h2>이 달 정산</h2>
@@ -1496,18 +1495,18 @@ function drawTrend(trend){
   });
 });
 const digitsOf=id=>Number($(id).value.replace(/[^0-9]/g,'')||0);
-$('#b-save').onclick=async()=>{
-  $('#b-save').disabled=true;
-  try{
-    const d = await call('apiSaveBudget', S.pin, S.month, {
-      fixed:digitsOf('#b-fixed'), living:digitsOf('#b-living'),
-      allowance1:digitsOf('#b-allow1'), allowance2:digitsOf('#b-allow2'), goal:digitsOf('#b-goal')});
-    toast('예산 저장됨');
-    if(document.activeElement) document.activeElement.blur();
-    applyLoad(d);
-  }catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
-  $('#b-save').disabled=false;
-};
+async function saveBudgetField_(){
+  const vals={ fixed:digitsOf('#b-fixed'), living:digitsOf('#b-living'),
+    allowance1:digitsOf('#b-allow1'), allowance2:digitsOf('#b-allow2'), goal:digitsOf('#b-goal') };
+  const cur=S.budget||{};
+  const changed=['fixed','living','allowance1','allowance2','goal'].some(k=>(Number(cur[k])||0)!==vals[k]);
+  if(!changed) return;
+  try{ applyLoad(await call('apiSaveBudget', S.pin, S.month, vals)); }
+  catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
+}
+['#b-fixed','#b-living','#b-allow1','#b-allow2','#b-goal'].forEach(id=>{
+  $(id).addEventListener('blur', saveBudgetField_);
+});
 
 /* ── 이 달 정산 ────────────────────────────────── */
 function renderSettle(){
