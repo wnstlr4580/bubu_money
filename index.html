@@ -1749,7 +1749,7 @@ function buildTxRow(t){
   row.innerHTML='<span class="who'+(t.who===S.names[1]?' you':'')+'"></span>'+
     '<div class="main"><div class="t">'+(t.note||t.category)+'</div>'+
     '<div class="m">'+metaLine+'</div></div>'+
-    '<span class="amt num '+t.kind+'">'+(t.kind==='수입'?'+':'')+comma(t.amount)+'</span>';
+    '<span class="amt num '+t.kind+'">'+(t.kind==='수입'?'+':t.kind==='지출'?'-':'')+comma(t.amount)+'</span>';
 
   const editBox=el('div','edit-box'); editBox.hidden=true;
   editBox.innerHTML=
