@@ -291,7 +291,8 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
 #boot-loading .spinner{width:28px;height:28px;border-radius:50%;
   border:3px solid var(--line);border-top-color:var(--me);animation:spin .7s linear infinite}
-#boot-loading p{color:var(--muted);font-size:.875rem}
+#boot-loading p{color:var(--muted);font-size:.875rem;text-align:center;padding:0 24px}
+#boot-loading #boot-retry{padding:10px 20px;border-radius:10px;background:var(--ink);color:#fff;font-weight:700}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 :focus-visible{outline:2px solid var(--me);outline-offset:2px}
@@ -309,7 +310,11 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   <p class="err" id="g-err"></p>
 </div>
 
-<div id="boot-loading" hidden><span class="spinner"></span><p>불러오는 중…</p></div>
+<div id="boot-loading" hidden>
+  <span class="spinner" id="boot-spinner"></span>
+  <p id="boot-msg">불러오는 중…</p>
+  <button id="boot-retry" type="button" hidden>다시 시도</button>
+</div>
 
 <div id="app" hidden>
   <div id="strip">
@@ -1179,14 +1184,20 @@ function ensureStorageAccess(){
     }
   }catch(e){}
 }
+function withTimeout(promise, ms){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('연결이 너무 오래 걸립니다. 인터넷 연결을 확인해주세요.')), ms)),
+  ]);
+}
 async function boot(){
   $('#gate').hidden=false;
   try{
-    const r = await call('apiNames', S.pin);
+    const r = await withTimeout(call('apiNames', S.pin), 15000);
     S.names=r.names;
     askWho();
   }catch(e){
-    $('#g-err').textContent='불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'');
+    $('#g-err').textContent='불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'')+' — 새로고침해 주세요';
   }
 }
 function askWho(){
@@ -1202,18 +1213,24 @@ function askWho(){
 async function start(){
   $('#gate').hidden=true; $('#app').hidden=false;
   $('#boot-loading').hidden=false;
+  $('#boot-spinner').hidden=false; $('#boot-retry').hidden=true;
+  $('#boot-msg').textContent='불러오는 중…';
   S.month=ymNow();
   buildKeypad(); paintAmount();
   try{
-    await Promise.all([load(), loadExtras()]);
+    await withTimeout(Promise.all([load(), loadExtras()]), 15000);
+    $('#boot-loading').hidden=true;
     try{
       const r = await call('apiRunFixedNow', S.pin, S.month);
       if(r.count>0){ applyLoad(r); applyExtras(r); }
     }catch(e){}
-  }finally{
-    $('#boot-loading').hidden=true;
+  }catch(e){
+    $('#boot-spinner').hidden=true;
+    $('#boot-msg').textContent='불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'');
+    $('#boot-retry').hidden=false;
   }
 }
+$('#boot-retry').onclick=()=>start();
 
 /* ── 데이터 ────────────────────────────────────── */
 /** 저장 API들이 이제 최신 데이터를 같이 돌려주므로, 저장 직후엔 이 함수로 바로 반영하고
