@@ -590,6 +590,9 @@ const FIREBASE_CONFIG = {
 };
 firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
+/* 일부 통신사/공유기 네트워크에서 Firestore의 기본 스트리밍 연결이 응답 없이 멈추는 문제가 있어,
+ * 항상 동작하는 롱폴링 방식으로 전환합니다. */
+db.settings({ experimentalAutoDetectLongPolling:true, useFetchStreams:false });
 const authReady = firebase.auth().signInAnonymously()
   .catch(e=>{ console.error('로그인 실패', e); });
 
