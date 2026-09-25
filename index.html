@@ -386,6 +386,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <div class="field"><label>생활비</label><input id="b-living" inputmode="numeric" placeholder="0"></div>
         <div class="field"><label id="b-allow1-lbl">용돈1</label><input id="b-allow1" inputmode="numeric" placeholder="0"></div>
         <div class="field"><label id="b-allow2-lbl">용돈2</label><input id="b-allow2" inputmode="numeric" placeholder="0"></div>
+        <p class="sub" style="margin:-8px 0 14px">용돈은 내역을 따로 기록하지 않고, 정한 금액을 지급 즉시 전액 사용한 것으로 처리해요.</p>
         <div class="field"><label>저축 목표</label><input id="b-goal" inputmode="numeric" placeholder="0"></div>
         <button class="wide" id="b-save">예산 저장</button>
       </div>
@@ -1415,8 +1416,9 @@ function renderMonth(){
     고정지출:sumBy(t=>t.category==='고정지출'),
     생활비:sumBy(t=>t.category==='생활비'),
   };
-  const spentAllow1=sumBy(t=>t.category==='용돈'&&t.who===S.names[0]);
-  const spentAllow2=sumBy(t=>t.category==='용돈'&&t.who===S.names[1]);
+  /* 용돈은 내역을 남기지 않고 지급과 동시에 전액 소비로 처리합니다. */
+  const spentAllow1=Number(b.allowance1)||0;
+  const spentAllow2=Number(b.allowance2)||0;
   const income=sumBy(t=>t.kind==='수입');
   const expense=sumBy(t=>t.kind==='지출');
   const saved=sumBy(t=>t.kind==='저축');
@@ -2315,9 +2317,11 @@ $('#income-save').onclick=async()=>{
 /* ── 공통 ──────────────────────────────────────── */
 function renderStrip(){
   const b=S.budget;
-  const totalBudget = b ? (Number(b.fixed)||0)+(Number(b.living)||0)+(Number(b.allowance1)||0)+(Number(b.allowance2)||0) : 0;
+  /* 용돈은 지급 즉시 전액 소비로 처리하므로, 남은 예산 계산에서는 애초에 제외합니다
+   * (고정지출·생활비 예산만 실제 지출과 비교합니다). */
+  const totalBudget = b ? (Number(b.fixed)||0)+(Number(b.living)||0) : 0;
   if(!totalBudget){ $('#strip-val').textContent='—'; return; }
-  const left = totalBudget - sumBy(t=>t.kind==='지출');
+  const left = totalBudget - sumBy(t=>t.kind==='지출'&&t.category!=='용돈');
   $('#strip-val').textContent=won(left);
   $('#strip-val').classList.toggle('over', left<0);
 }
