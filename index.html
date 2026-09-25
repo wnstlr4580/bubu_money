@@ -602,6 +602,14 @@ function paintBusy(){
   b.style.width = busy>0 ? '70%' : '0';
   if(busy===0) setTimeout(()=>{ if(busy===0) b.style.width='0'; },300);
 }
+/** 일부 네트워크에서 Firestore 요청이 응답도 에러도 없이 무한정 멈추는 경우가 있어,
+ *  개별 요청 하나하나에 최대 대기 시간을 걸어 반드시 성공/실패가 갈리도록 합니다. */
+function withTimeout(promise, ms){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('연결이 너무 오래 걸립니다. 인터넷 연결을 확인해주세요.')), ms)),
+  ]);
+}
 /** google.script.run / fetch 대신, 로컬 Firestore 함수(API 객체)를 부릅니다.
  *  함수 이름과 인자 순서는 예전 Apps Script 버전과 동일하게 맞춰서, 나머지 화면 코드는
  *  전혀 안 건드려도 되게 했습니다. */
@@ -609,10 +617,12 @@ async function call(fn){
   const args = [].slice.call(arguments,1);
   busy++; paintBusy();
   try{
-    await authReady;
-    const impl = API[fn];
-    if(!impl) throw new Error('알 수 없는 요청입니다: '+fn);
-    const result = await impl.apply(null, args);
+    const result = await withTimeout((async()=>{
+      await authReady;
+      const impl = API[fn];
+      if(!impl) throw new Error('알 수 없는 요청입니다: '+fn);
+      return await impl.apply(null, args);
+    })(), 12000);
     busy--; paintBusy();
     return result;
   }catch(e){
@@ -1187,16 +1197,10 @@ function ensureStorageAccess(){
     }
   }catch(e){}
 }
-function withTimeout(promise, ms){
-  return Promise.race([
-    promise,
-    new Promise((_,reject)=>setTimeout(()=>reject(new Error('연결이 너무 오래 걸립니다. 인터넷 연결을 확인해주세요.')), ms)),
-  ]);
-}
 async function boot(){
   $('#gate').hidden=false;
   try{
-    const r = await withTimeout(call('apiNames', S.pin), 15000);
+    const r = await call('apiNames', S.pin);
     S.names=r.names;
     askWho();
   }catch(e){
@@ -1221,7 +1225,8 @@ async function start(){
   S.month=ymNow();
   buildKeypad(); paintAmount();
   try{
-    await withTimeout(Promise.all([load(), loadExtras()]), 15000);
+    const [ok1, ok2] = await Promise.all([load(), loadExtras()]);
+    if(!ok1 || !ok2) throw new Error('데이터를 불러오지 못했습니다.');
     $('#boot-loading').hidden=true;
     try{
       const r = await call('apiRunFixedNow', S.pin, S.month);
@@ -1256,13 +1261,13 @@ async function loadSettlement(){
 }
 /** 거래·예산·자산처럼 자주 바뀌는 것만 불러옵니다 (월 이동 등 순수 조회용). */
 async function load(){
-  try{ applyLoad(await call('apiLoad', S.pin, S.month)); }
-  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); }
+  try{ applyLoad(await call('apiLoad', S.pin, S.month)); return true; }
+  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); return false; }
 }
 /** 카테고리·고정지출·카드처럼 자주 안 바뀌는 것만 불러옵니다 (앱을 켤 때만 호출). */
 async function loadExtras(){
-  try{ applyExtras(await call('apiLoadExtras', S.pin)); }
-  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); }
+  try{ applyExtras(await call('apiLoadExtras', S.pin)); return true; }
+  catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); return false; }
 }
 function sumBy(pred){ return S.tx.filter(pred).reduce((a,t)=>a+Number(t.amount),0); }
 function ownerOptions(){ return [S.names[0], S.names[1], '공동']; }
