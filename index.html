@@ -1525,7 +1525,7 @@ function renderSettle(){
   const bothDone = st.names.length>0 && st.names.every(n=>st.status[n] && st.status[n].done);
   const banner=$('#settle-banner');
   banner.hidden=!bothDone;
-  banner.textContent='✅ 이번 달 정산이 모두 완료됐어요';
+  banner.textContent='이번 달 정산이 모두 완료됐어요';
 }
 async function toggleSettle(newDone){
   const prev = S.settlement;
@@ -2158,7 +2158,7 @@ function renderGoals(){
       if(g.targetDate){
         const dateLabel=g.targetDate.replace('-','.');
         if(saved>=g.target){
-          cells+='<div><span>'+dateLabel+' 목표</span><b class="num">달성 🎉</b></div>';
+          cells+='<div><span>'+dateLabel+' 목표</span><b class="num" style="color:var(--me)">달성</b></div>';
         }else{
           const monthsLeft=monthsBetween_(ymNow(), g.targetDate);
           if(monthsLeft<=0){
@@ -2176,7 +2176,8 @@ function renderGoals(){
     if(rate>0 && g.target>0){
       const eta=el('p','sub'); eta.style.margin='8px 0 0';
       if(saved>=g.target){
-        eta.textContent='목표를 달성했어요 🎉';
+        eta.textContent='목표를 달성했어요';
+        eta.style.color='var(--me)'; eta.style.fontWeight='600';
       }else{
         const months=Math.ceil((g.target-saved)/rate);
         const d=new Date(); d.setMonth(d.getMonth()+months);
