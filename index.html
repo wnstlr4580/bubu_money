@@ -504,6 +504,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
       <input type="hidden" id="gl-id">
       <div class="field"><label>이름</label><input id="gl-name" placeholder="예: 자동차"></div>
       <div class="field"><label>목표금액</label><input id="gl-target" inputmode="numeric" placeholder="0"></div>
+      <div class="field"><label>목표 날짜</label><input type="month" id="gl-date"></div>
       <div class="field"><label>메모</label><input id="gl-memo" placeholder="선택"></div>
       <button class="wide" id="gl-save">저장</button>
     </div>
@@ -662,7 +663,7 @@ function docToCategory_(doc){
 }
 function docToGoal_(doc){
   const g=doc.data();
-  return { id:doc.id, name:g.name, target:Number(g.target)||0, memo:g.memo||'' };
+  return { id:doc.id, name:g.name, target:Number(g.target)||0, memo:g.memo||'', targetDate:g.targetDate||'' };
 }
 function docToFixedSaving_(doc){
   const f=doc.data();
@@ -1010,11 +1011,13 @@ API.apiSaveGoal = async (pin, g) => {
   if(g.id){
     await db.collection('goals').doc(g.id).update({
       name:String(g.name).trim().slice(0,40), target:Number(g.target)||0, memo:String(g.memo||'').slice(0,200),
+      targetDate:String(g.targetDate||''),
     });
     return Object.assign(await API.apiLoadExtras(pin), { success:true });
   }
   await db.collection('goals').add({
     name:String(g.name).trim().slice(0,40), target:Number(g.target)||0, memo:String(g.memo||'').slice(0,200),
+    targetDate:String(g.targetDate||''),
   });
   return Object.assign(await API.apiLoadExtras(pin), { success:true });
 };
@@ -1180,6 +1183,11 @@ function todayStr(){
 function shiftYm(ym,n){
   const y=+ym.slice(0,4), m=+ym.slice(5,7)-1+n, d=new Date(y,m,1);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function monthsBetween_(fromYm, toYm){
+  const [fy,fm]=fromYm.split('-').map(Number);
+  const [ty,tm]=toYm.split('-').map(Number);
+  return (ty-fy)*12 + (tm-fm);
 }
 function toast(msg){
   const t=$('#toast'); t.textContent=msg; t.classList.add('on');
@@ -2054,6 +2062,18 @@ function renderGoals(){
       }
       wrap.appendChild(eta);
     }
+    if(g.targetDate && g.target>0 && saved<g.target){
+      const need=el('p','sub'); need.style.margin='6px 0 0';
+      const monthsLeft=monthsBetween_(ymNow(), g.targetDate);
+      const dateLabel=g.targetDate.replace('-','.');
+      if(monthsLeft<=0){
+        need.textContent=dateLabel+'까지였는데 지났어요. 남은 '+comma(g.target-saved)+'원, 목표 날짜를 다시 잡아보세요.';
+      }else{
+        const perMonth=Math.ceil((g.target-saved)/monthsLeft);
+        need.textContent=dateLabel+'까지 모으려면 매달 '+comma(perMonth)+'원씩 저축해야 해요 (약 '+monthsLeft+'개월 남음)';
+      }
+      wrap.appendChild(need);
+    }
     if(g.memo){
       const memo=el('p','sub'); memo.style.margin='6px 0 0'; memo.textContent=g.memo;
       wrap.appendChild(memo);
@@ -2062,7 +2082,8 @@ function renderGoals(){
     const edit=el('button','x'); edit.textContent='✎'; edit.setAttribute('aria-label','수정');
     edit.onclick=()=>{
       $('#gl-id').value=g.id; $('#gl-name').value=g.name;
-      $('#gl-target').value=g.target?comma(g.target):''; $('#gl-memo').value=g.memo||'';
+      $('#gl-target').value=g.target?comma(g.target):''; $('#gl-date').value=g.targetDate||'';
+      $('#gl-memo').value=g.memo||'';
       openSheet('#gl-form');
     };
     const del=el('button','x'); del.textContent='✕';
@@ -2085,7 +2106,7 @@ async function loadGoalProgress(){
   }catch(e){ toast('진행률을 불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
 }
 $('#gl-toggle').onclick=()=>{
-  $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-memo').value='';
+  $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-date').value=''; $('#gl-memo').value='';
   openSheet('#gl-form');
 };
 $('#gl-form-close').onclick=()=>closeSheet('#gl-form');
@@ -2097,12 +2118,13 @@ $('#gl-save').onclick=async()=>{
   const id=$('#gl-id').value;
   const name=$('#gl-name').value.trim();
   const target=digitsOf('#gl-target');
+  const targetDate=$('#gl-date').value;
   const memo=$('#gl-memo').value.trim();
   if(!name){ toast('이름을 입력하세요'); return; }
   $('#gl-save').disabled=true;
   try{
-    const d = await call('apiSaveGoal',S.pin,{id:id||undefined, name:name, target:target, memo:memo});
-    $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-memo').value='';
+    const d = await call('apiSaveGoal',S.pin,{id:id||undefined, name:name, target:target, targetDate:targetDate, memo:memo});
+    $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-date').value=''; $('#gl-memo').value='';
     closeSheet('#gl-form');
     toast('저장됨'); applyExtras(d);
     loadGoalProgress();
