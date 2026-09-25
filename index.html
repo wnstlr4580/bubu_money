@@ -119,6 +119,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .stats div{background:var(--paper);padding:14px 12px}
 .stats span{display:block;font-size:.75rem;color:var(--muted);margin-bottom:3px}
 .stats b{font-size:1.0625rem;font-weight:700}
+.goal-stats{grid-template-columns:repeat(2,1fr);margin-top:8px}
 
 .editor{margin-top:28px;border-top:1px solid var(--line);padding-top:18px}
 .field{display:flex;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
@@ -2050,29 +2051,37 @@ function renderGoals(){
       (g.target>0?' / '+comma(g.target):'')+'</em></div>'+
       '<div class="track"><div class="fill" style="width:'+(Math.min(ratio,1)*100)+'%"></div></div>';
     wrap.appendChild(bar);
+    if(g.target>0){
+      const stats=el('div','stats goal-stats');
+      let cells='<div><span>목표금액</span><b class="num">'+comma(g.target)+'원</b></div>';
+      if(g.targetDate){
+        const dateLabel=g.targetDate.replace('-','.');
+        if(saved>=g.target){
+          cells+='<div><span>'+dateLabel+' 목표</span><b class="num">달성 🎉</b></div>';
+        }else{
+          const monthsLeft=monthsBetween_(ymNow(), g.targetDate);
+          if(monthsLeft<=0){
+            cells+='<div><span>'+dateLabel+'(지남)</span><b class="num">'+comma(g.target-saved)+'원 남음</b></div>';
+          }else{
+            const perMonth=Math.ceil((g.target-saved)/monthsLeft);
+            cells+='<div><span>'+dateLabel+'까지 매달</span><b class="num">'+comma(perMonth)+'원</b></div>';
+          }
+        }
+      }
+      stats.innerHTML=cells;
+      wrap.appendChild(stats);
+    }
     const rate=S.goalRate[g.id]||0;
     if(rate>0 && g.target>0){
-      const eta=el('p','sub'); eta.style.margin='6px 0 0';
+      const eta=el('p','sub'); eta.style.margin='8px 0 0';
       if(saved>=g.target){
         eta.textContent='목표를 달성했어요 🎉';
       }else{
         const months=Math.ceil((g.target-saved)/rate);
         const d=new Date(); d.setMonth(d.getMonth()+months);
-        eta.textContent='매달 '+comma(rate)+'원씩 · 약 '+months+'개월 후 달성 예상 ('+d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+')';
+        eta.textContent='지금 등록된 고정저축(매달 '+comma(rate)+'원)으로는 약 '+months+'개월 후 달성 예상 ('+d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+')';
       }
       wrap.appendChild(eta);
-    }
-    if(g.targetDate && g.target>0 && saved<g.target){
-      const need=el('p','sub'); need.style.margin='6px 0 0';
-      const monthsLeft=monthsBetween_(ymNow(), g.targetDate);
-      const dateLabel=g.targetDate.replace('-','.');
-      if(monthsLeft<=0){
-        need.textContent=dateLabel+'까지였는데 지났어요. 남은 '+comma(g.target-saved)+'원, 목표 날짜를 다시 잡아보세요.';
-      }else{
-        const perMonth=Math.ceil((g.target-saved)/monthsLeft);
-        need.textContent=dateLabel+'까지 모으려면 매달 '+comma(perMonth)+'원씩 저축해야 해요 (약 '+monthsLeft+'개월 남음)';
-      }
-      wrap.appendChild(need);
     }
     if(g.memo){
       const memo=el('p','sub'); memo.style.margin='6px 0 0'; memo.textContent=g.memo;
