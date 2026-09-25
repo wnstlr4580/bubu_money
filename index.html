@@ -1325,6 +1325,7 @@ function buildOwnerSelect(sel, keep){
     const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o);
   });
   if(prev && ownerOptions().indexOf(prev)>=0) sel.value=prev;
+  else if(S.who && ownerOptions().indexOf(S.who)>=0) sel.value=S.who;
 }
 
 /* ── 입력 ──────────────────────────────────────── */
@@ -1915,7 +1916,7 @@ function openFixedForm(f){
   $('#fx-amount').value=f?comma(f.amount):'';
   $('#fx-day').value=f?f.day:'';
   buildOwnerSelect($('#fx-owner'));
-  $('#fx-owner').value=f?f.owner:'';
+  if(f) $('#fx-owner').value=f.owner;
   $('#fx-memo').value=f?f.memo:'';
   $('#fx-form-title').textContent=f?'고정지출 수정':'고정지출 추가';
   $('#fx-add').textContent=f?'저장':'고정지출 추가';
