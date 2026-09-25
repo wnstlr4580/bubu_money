@@ -55,6 +55,7 @@ button{cursor:pointer}
 .amount .won{font-size:.45em;font-weight:600;margin-right:.18em;color:var(--faint);letter-spacing:0}
 
 .kindsel{flex:none;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:11px}
+#log-viewsel{grid-template-columns:repeat(2,1fr)}
 .kindsel button{padding:10px 4px;border-radius:11px;background:var(--surface);font-size:.875rem;
   font-weight:700;color:var(--muted);transition:background var(--tap),color var(--tap)}
 .kindsel button[aria-pressed="true"]{background:var(--ink);color:#fff}
@@ -104,6 +105,22 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .monthnav button{width:32px;height:32px;border-radius:10px;background:var(--surface);
   display:flex;align-items:center;justify-content:center;color:var(--muted)}
 .monthnav button:disabled{opacity:.3}
+
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;
+  font-size:.75rem;color:var(--muted);margin-bottom:6px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-day{aspect-ratio:1;border-radius:10px;background:var(--surface);padding:5px 3px;
+  display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.6875rem;
+  cursor:pointer;overflow:hidden}
+.cal-day.empty{background:none;cursor:default}
+.cal-day.today{outline:1.5px solid var(--ink)}
+.cal-day.sel{background:var(--ink)}
+.cal-day.sel .cal-daynum,.cal-day.sel .cal-in,.cal-day.sel .cal-out{color:#fff}
+.cal-daynum{font-weight:700;font-size:.75rem}
+.cal-in{color:var(--me)}
+.cal-out{color:var(--over)}
+#lc-daylist{margin-top:18px}
+#lc-daylist h3{font-size:.875rem;margin:0 0 8px;color:var(--muted);font-weight:600}
 
 .bars{margin-top:22px;display:flex;flex-direction:column;gap:16px}
 .bar .top{display:flex;align-items:baseline;font-size:.875rem;margin-bottom:7px}
@@ -416,15 +433,31 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 
   <section class="screen" id="log">
     <div class="body">
-      <input id="l-search" placeholder="메모·카테고리 검색"
-        style="width:100%;background:var(--surface);border-radius:12px;padding:11px 14px;
-        font-size:.875rem;margin-bottom:12px">
-      <div style="display:flex;gap:8px;margin-bottom:16px">
-        <select id="l-kind" style="flex:1;min-width:0"></select>
-        <select id="l-who" style="flex:1;min-width:0"></select>
-        <select id="l-cat" style="flex:1;min-width:0"></select>
+      <div class="kindsel" id="log-viewsel" style="margin-bottom:14px">
+        <button data-view="list" aria-pressed="true">목록</button>
+        <button data-view="cal" aria-pressed="false">캘린더</button>
       </div>
-      <div id="l-list"></div>
+      <div id="log-list-view">
+        <input id="l-search" placeholder="메모·카테고리 검색"
+          style="width:100%;background:var(--surface);border-radius:12px;padding:11px 14px;
+          font-size:.875rem;margin-bottom:12px">
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <select id="l-kind" style="flex:1;min-width:0"></select>
+          <select id="l-who" style="flex:1;min-width:0"></select>
+          <select id="l-cat" style="flex:1;min-width:0"></select>
+        </div>
+        <div id="l-list"></div>
+      </div>
+      <div id="log-cal-view" hidden>
+        <div class="monthnav">
+          <button id="lc-prev" aria-label="이전 달">‹</button>
+          <b id="lc-title">—</b>
+          <button id="lc-next" aria-label="다음 달">›</button>
+        </div>
+        <div class="cal-dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+        <div class="cal-grid" id="lc-grid"></div>
+        <div id="lc-daylist"></div>
+      </div>
     </div>
   </section>
 
@@ -1166,6 +1199,7 @@ const S={ pin:'', who:'', names:['나','배우자'], month:'',
           fixedExpenses:[], cards:[], categories:[], goals:[], goalProgress:{}, goalRate:{}, fixedSavings:[],
           entryKind:'지출', cat:'', digits:'', goal:'',
           logFilter:{kind:'all', who:'all', cat:'all', q:''}, searchResult:null,
+          logView:'list', calSelDate:null,
           settlement:null, yearSummary:null, year:new Date().getFullYear() };
 
 const store={
@@ -1699,55 +1733,118 @@ function renderLog(){
       '일월화수목금토'[d.getDay()]+'</span><em class="num">'+comma(total)+'</em>';
     g.appendChild(head);
 
-    items.forEach(t=>{
-      const row=el('div','row');
-      const metaLine = t.note ? (t.category+' · '+t.who) : t.who;
-      row.innerHTML='<span class="who'+(t.who===S.names[1]?' you':'')+'"></span>'+
-        '<div class="main"><div class="t">'+(t.note||t.category)+'</div>'+
-        '<div class="m">'+metaLine+'</div></div>'+
-        '<span class="amt num '+t.kind+'">'+(t.kind==='수입'?'+':'')+comma(t.amount)+'</span>';
-
-      const editBox=el('div','edit-box'); editBox.hidden=true;
-      editBox.innerHTML=
-        '<div class="ef-row"><input type="date" class="ef-date">'+
-        '<input inputmode="numeric" class="ef-amt" placeholder="금액"></div>'+
-        '<input class="ef-note" placeholder="메모">'+
-        '<div class="ef-actions"><button class="ef-save">저장</button><button class="ef-del">삭제</button></div>';
-      const dateInp=editBox.querySelector('.ef-date'); dateInp.value=t.date;
-      const amtInp=editBox.querySelector('.ef-amt'); amtInp.value=comma(t.amount);
-      amtInp.oninput=e=>{ const v=e.target.value.replace(/[^0-9]/g,''); e.target.value=v?comma(v):''; };
-      const noteInp=editBox.querySelector('.ef-note'); noteInp.value=t.note||'';
-
-      editBox.querySelector('.ef-save').onclick=async e=>{
-        e.stopPropagation();
-        const amount=Number(amtInp.value.replace(/[^0-9]/g,'')||0);
-        if(!dateInp.value || amount<=0){ toast('날짜와 금액을 확인하세요'); return; }
-        try{
-          const d = await call('apiEditTx', S.pin, t.id, {date:dateInp.value, amount:amount, note:noteInp.value.trim()}, S.month);
-          toast('수정됨'); applyLoad(d);
-        }catch(err){ toast('수정하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
-      };
-      editBox.querySelector('.ef-del').onclick=async e=>{
-        e.stopPropagation();
-        if(!confirm('삭제할까요?')) return;
-        row.remove(); toast('삭제됨');
-        try{ const d = await call('apiDeleteTx',S.pin,t.id,S.month); applyLoad(d); }
-        catch(err){ toast('삭제하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
-      };
-      editBox.onclick=e=>e.stopPropagation();
-      row.appendChild(editBox);
-
-      row.onclick=()=>{
-        document.querySelectorAll('.row.open').forEach(r=>{
-          if(r!==row){ r.classList.remove('open'); r.querySelector('.edit-box').hidden=true; }
-        });
-        row.classList.toggle('open');
-        editBox.hidden=!row.classList.contains('open');
-      };
-      g.appendChild(row);
-    });
+    items.forEach(t=>{ g.appendChild(buildTxRow(t)); });
     list.appendChild(g);
   });
+}
+/** 기록 목록·캘린더 상세 목록에서 공통으로 쓰는 거래 한 줄(펼치면 수정 가능). */
+function buildTxRow(t){
+  const row=el('div','row');
+  const metaLine = t.note ? (t.category+' · '+t.who) : t.who;
+  row.innerHTML='<span class="who'+(t.who===S.names[1]?' you':'')+'"></span>'+
+    '<div class="main"><div class="t">'+(t.note||t.category)+'</div>'+
+    '<div class="m">'+metaLine+'</div></div>'+
+    '<span class="amt num '+t.kind+'">'+(t.kind==='수입'?'+':'')+comma(t.amount)+'</span>';
+
+  const editBox=el('div','edit-box'); editBox.hidden=true;
+  editBox.innerHTML=
+    '<div class="ef-row"><input type="date" class="ef-date">'+
+    '<input inputmode="numeric" class="ef-amt" placeholder="금액"></div>'+
+    '<input class="ef-note" placeholder="메모">'+
+    '<div class="ef-actions"><button class="ef-save">저장</button><button class="ef-del">삭제</button></div>';
+  const dateInp=editBox.querySelector('.ef-date'); dateInp.value=t.date;
+  const amtInp=editBox.querySelector('.ef-amt'); amtInp.value=comma(t.amount);
+  amtInp.oninput=e=>{ const v=e.target.value.replace(/[^0-9]/g,''); e.target.value=v?comma(v):''; };
+  const noteInp=editBox.querySelector('.ef-note'); noteInp.value=t.note||'';
+
+  editBox.querySelector('.ef-save').onclick=async e=>{
+    e.stopPropagation();
+    const amount=Number(amtInp.value.replace(/[^0-9]/g,'')||0);
+    if(!dateInp.value || amount<=0){ toast('날짜와 금액을 확인하세요'); return; }
+    try{
+      const d = await call('apiEditTx', S.pin, t.id, {date:dateInp.value, amount:amount, note:noteInp.value.trim()}, S.month);
+      toast('수정됨'); applyLoad(d); renderCalendar();
+    }catch(err){ toast('수정하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
+  };
+  editBox.querySelector('.ef-del').onclick=async e=>{
+    e.stopPropagation();
+    if(!confirm('삭제할까요?')) return;
+    row.remove(); toast('삭제됨');
+    try{ const d = await call('apiDeleteTx',S.pin,t.id,S.month); applyLoad(d); renderCalendar(); }
+    catch(err){ toast('삭제하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
+  };
+  editBox.onclick=e=>e.stopPropagation();
+  row.appendChild(editBox);
+
+  row.onclick=()=>{
+    document.querySelectorAll('.row.open').forEach(r=>{
+      if(r!==row){ r.classList.remove('open'); r.querySelector('.edit-box').hidden=true; }
+    });
+    row.classList.toggle('open');
+    editBox.hidden=!row.classList.contains('open');
+  };
+  return row;
+}
+
+/* ── 기록: 목록/캘린더 전환 ────────────────────── */
+document.querySelectorAll('#log-viewsel button').forEach(btn=>{
+  btn.onclick=()=>{
+    S.logView=btn.dataset.view;
+    document.querySelectorAll('#log-viewsel button').forEach(b=>b.setAttribute('aria-pressed', b===btn));
+    $('#log-list-view').hidden = S.logView!=='list';
+    $('#log-cal-view').hidden = S.logView!=='cal';
+    if(S.logView==='cal') renderCalendar();
+  };
+});
+$('#lc-prev').onclick=()=>{ S.month=shiftYm(S.month,-1); S.calSelDate=null; load(); };
+$('#lc-next').onclick=()=>{ S.month=shiftYm(S.month, 1); S.calSelDate=null; load(); };
+function renderCalendar(){
+  const title=$('#lc-title'); if(!title) return;
+  const [y,m]=S.month.split('-').map(Number);
+  title.textContent=y+'년 '+m+'월';
+  $('#lc-next').disabled = S.month>=ymNow();
+
+  const byDate={};
+  S.tx.forEach(t=>{ (byDate[t.date]=byDate[t.date]||[]).push(t); });
+
+  const firstDow=new Date(y, m-1, 1).getDay();
+  const daysInMonth=new Date(y, m, 0).getDate();
+  const todayStrVal=todayStr();
+
+  const grid=$('#lc-grid'); grid.innerHTML='';
+  for(let i=0;i<firstDow;i++) grid.appendChild(el('div','cal-day empty'));
+  for(let day=1; day<=daysInMonth; day++){
+    const dateStr=S.month+'-'+String(day).padStart(2,'0');
+    const items=byDate[dateStr]||[];
+    const income=items.filter(t=>t.kind==='수입').reduce((a,t)=>a+t.amount,0);
+    const outgo=items.filter(t=>t.kind!=='수입').reduce((a,t)=>a+t.amount,0);
+    const cell=el('div','cal-day'+(dateStr===todayStrVal?' today':'')+(dateStr===S.calSelDate?' sel':''));
+    cell.innerHTML='<span class="cal-daynum">'+day+'</span>'+
+      (income>0?'<span class="cal-in">+'+compactNum_(income)+'</span>':'')+
+      (outgo>0?'<span class="cal-out">-'+compactNum_(outgo)+'</span>':'');
+    cell.onclick=()=>{ S.calSelDate = S.calSelDate===dateStr ? null : dateStr; renderCalendar(); };
+    grid.appendChild(cell);
+  }
+
+  const daylist=$('#lc-daylist'); daylist.innerHTML='';
+  if(S.calSelDate){
+    const items=byDate[S.calSelDate]||[];
+    const d=new Date(S.calSelDate+'T00:00:00');
+    const h=el('h3'); h.textContent=(d.getMonth()+1)+'월 '+d.getDate()+'일 '+'일월화수목금토'[d.getDay()]+
+      (items.length?' · '+items.length+'건':'');
+    daylist.appendChild(h);
+    if(!items.length){
+      const p=el('p','sub'); p.textContent='이 날은 기록이 없어요.';
+      daylist.appendChild(p);
+    } else {
+      items.forEach(t=>daylist.appendChild(buildTxRow(t)));
+    }
+  }
+}
+function compactNum_(n){
+  if(n>=100000000) return (n/100000000).toFixed(n%100000000===0?0:1)+'억';
+  if(n>=10000) return (n/10000).toFixed(n%10000===0?0:1)+'만';
+  return comma(n);
 }
 
 /* ── 관리: 고정지출 ────────────────────────────── */
@@ -2225,7 +2322,7 @@ function renderStrip(){
 function renderAll(){
   buildChips(); buildGoalRow();
   renderStrip(); renderMonth(); renderAssets();
-  buildLogFilters(); renderLog();
+  buildLogFilters(); renderLog(); renderCalendar();
   buildOwnerSelect($('#fx-owner'), true); buildOwnerSelect($('#cd-owner'), true);
   renderFixed(); renderCards(); renderCategories(); renderGoals(); renderFixedSavings();
   renderSettle(); renderCompare();
