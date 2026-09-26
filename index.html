@@ -1212,6 +1212,17 @@ const store={
 };
 
 function comma(n){ return Number(n||0).toLocaleString('ko-KR'); }
+/** 숫자 입력칸에 쉼표를 자동으로 넣어주되, 중간에 수정할 때 커서가 맨 뒤로
+ *  튀지 않고 원래 위치 근처에 그대로 있도록 길이 변화만큼 커서를 보정합니다. */
+function formatNumericInput_(e){
+  const el=e.target;
+  const prevLen=el.value.length, selStart=el.selectionStart;
+  const raw=el.value.replace(/[^0-9]/g,'');
+  const formatted=raw?comma(raw):'';
+  el.value=formatted;
+  const pos=Math.max(0, selStart + (formatted.length - prevLen));
+  el.setSelectionRange(pos, pos);
+}
 function won(n){ return (n<0?'-':'')+'₩'+comma(Math.abs(Math.round(n))); }
 function ymNow(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function todayStr(){
@@ -1494,10 +1505,7 @@ function drawTrend(trend){
     '<div class="axis"><span>'+trend[0].m.slice(2)+'</span><span>'+trend[trend.length-1].m.slice(2)+'</span></div>';
 }
 ['#b-fixed','#b-living','#b-allow1','#b-allow2','#b-goal','#fx-amount','#cd-min','#fs-amount'].forEach(id=>{
-  $(id).addEventListener('input',e=>{
-    const raw=e.target.value.replace(/[^0-9]/g,'');
-    e.target.value = raw?comma(raw):'';
-  });
+  $(id).addEventListener('input', formatNumericInput_);
 });
 const digitsOf=id=>Number($(id).value.replace(/[^0-9]/g,'')||0);
 async function saveBudgetField_(){
@@ -1602,7 +1610,7 @@ function renderAssets(){
       '</span></div>';
     const main=row.querySelector('.main');
     const inp=el('input'); inp.inputMode='numeric'; inp.value=comma(r.balance);
-    inp.oninput=e=>{ const v=e.target.value.replace(/[^0-9]/g,''); e.target.value=v?comma(v):''; };
+    inp.oninput=formatNumericInput_;
     inp.onblur=async()=>{
       const v=Number(inp.value.replace(/[^0-9]/g,'')||0);
       if(v===Number(r.balance)) return;
@@ -1762,7 +1770,7 @@ function buildTxRow(t){
     '<div class="ef-actions"><button class="ef-save">저장</button><button class="ef-del">삭제</button></div>';
   const dateInp=editBox.querySelector('.ef-date'); dateInp.value=t.date;
   const amtInp=editBox.querySelector('.ef-amt'); amtInp.value=comma(t.amount);
-  amtInp.oninput=e=>{ const v=e.target.value.replace(/[^0-9]/g,''); e.target.value=v?comma(v):''; };
+  amtInp.oninput=formatNumericInput_;
   const noteInp=editBox.querySelector('.ef-note'); noteInp.value=t.note||'';
 
   editBox.querySelector('.ef-save').onclick=async e=>{
@@ -2222,10 +2230,7 @@ $('#gl-toggle').onclick=()=>{
   openSheet('#gl-form');
 };
 $('#gl-form-close').onclick=()=>closeSheet('#gl-form');
-$('#gl-target').addEventListener('input',e=>{
-  const raw=e.target.value.replace(/[^0-9]/g,'');
-  e.target.value = raw?comma(raw):'';
-});
+$('#gl-target').addEventListener('input', formatNumericInput_);
 $('#gl-save').onclick=async()=>{
   const id=$('#gl-id').value;
   const name=$('#gl-name').value.trim();
@@ -2298,10 +2303,7 @@ function renderYear(){
   }
 }
 ['#income1','#income2'].forEach(id=>{
-  $(id).addEventListener('input',e=>{
-    const raw=e.target.value.replace(/[^0-9]/g,'');
-    e.target.value = raw?comma(raw):'';
-  });
+  $(id).addEventListener('input', formatNumericInput_);
 });
 $('#income-save').onclick=async()=>{
   const i1=Number($('#income1').value.replace(/[^0-9]/g,'')||0);
