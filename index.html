@@ -1391,6 +1391,7 @@ $('#save').onclick=async()=>{
   const kind=S.entryKind, cat=S.cat;
   const goalId = kind==='저축' ? $('#entry-goal').value : '';
   const date=$('#entry-date').value || todayStr();
+  const prevDigits=S.digits, prevNote=$('#note').value;
   $('#save').disabled=true;
   S.digits=''; $('#note').value=''; paintAmount();
   toast(cat+' '+won(amount)+' 기록됨');
@@ -1399,7 +1400,10 @@ $('#save').onclick=async()=>{
       who:S.who, note:note, date:date, goalId:goalId});
     $('#entry-date').value=todayStr();
     applyLoad(d);
-  }catch(e){ toast('저장하지 못했습니다. 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); }
+  }catch(e){
+    S.digits=prevDigits; $('#note').value=prevNote; paintAmount();
+    toast('저장하지 못했습니다. 다시 시도하세요.'+(e&&e.message?(' — '+e.message):''));
+  }
 };
 
 /* ── 이 달 ─────────────────────────────────────── */
@@ -1608,7 +1612,6 @@ function renderAssets(){
     const x=el('button','x'); x.textContent='✕';
     x.onclick=async()=>{
       if(!confirm("'"+r.account+"' 계좌를 이 달 목록에서 지울까요?")) return;
-      row.remove();
       try{ applyLoad(await call('apiDeleteAsset',S.pin,r.id,S.month)); }
       catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
@@ -1773,10 +1776,11 @@ function buildTxRow(t){
   };
   editBox.querySelector('.ef-del').onclick=async e=>{
     e.stopPropagation();
-    if(!confirm('삭제할까요?')) return;
-    row.remove(); toast('삭제됨');
-    try{ const d = await call('apiDeleteTx',S.pin,t.id,S.month); applyLoad(d); renderCalendar(); }
-    catch(err){ toast('삭제하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
+    if(!confirm("'"+(t.note||t.category)+"' "+comma(t.amount)+"원 내역을 삭제할까요?")) return;
+    try{
+      const d = await call('apiDeleteTx',S.pin,t.id,S.month);
+      toast('삭제됨'); applyLoad(d); renderCalendar();
+    }catch(err){ toast('삭제하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
   };
   editBox.onclick=e=>e.stopPropagation();
   row.appendChild(editBox);
@@ -1900,7 +1904,6 @@ function renderFixed(){
     x.onclick=async(e)=>{
       e.stopPropagation();
       if(!confirm("'"+f.item+"' 항목을 삭제할까요?")) return;
-      row.remove();
       try{ applyExtras(await call('apiDeleteFixed',S.pin,f.id)); }
       catch(err){ toast('삭제하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
     };
@@ -1969,7 +1972,6 @@ function renderFixedSavings(){
     const x=el('button','x'); x.textContent='✕';
     x.onclick=async()=>{
       if(!confirm("'"+(goal?goal.name:'고정저축')+"' 항목을 삭제할까요?")) return;
-      row.remove();
       try{ applyExtras(await call('apiDeleteFixedSaving',S.pin,f.id)); }
       catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
@@ -2105,7 +2107,6 @@ function renderCategories(){
       const del=el('button','x'); del.textContent='✕';
       del.onclick=async()=>{
         if(!confirm(c.name+' 카테고리를 삭제할까요?\n(이미 기록된 내역은 그대로 남습니다)')) return;
-        row.remove();
         try{ applyExtras(await call('apiDeleteCategory',S.pin,c.id)); }
         catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
       };
@@ -2201,7 +2202,6 @@ function renderGoals(){
     const del=el('button','x'); del.textContent='✕';
     del.onclick=async()=>{
       if(!confirm("'"+g.name+"' 목표를 삭제할까요?\n(이미 저축한 기록은 그대로 남습니다)")) return;
-      wrap.remove();
       try{ applyExtras(await call('apiDeleteGoal',S.pin,g.id)); }
       catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
