@@ -158,7 +158,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .chart .axis{display:flex;justify-content:space-between;font-size:.6875rem;color:var(--faint);margin-top:8px}
 
 .acct{display:flex;align-items:center;flex-wrap:wrap;gap:11px;padding:13px 0;border-bottom:1px solid var(--line)}
-.acct.grouped{padding-top:6px}
 .acct .who{width:3px;height:30px;border-radius:2px;flex:none;background:var(--faint)}
 .acct .who.me{background:var(--me)}
 .acct .who.you{background:var(--you)}
@@ -1616,17 +1615,22 @@ function renderAssets(){
     p.innerHTML='<b>아직 계좌가 없습니다</b>예금·투자·대출을 한 줄씩 넣으면 순자산이 계산됩니다.';
     list.appendChild(p);
   }
-  let lastAccountName_=null;
-  S.assets.slice().sort((a,b)=>a.account.localeCompare(b.account,'ko')).forEach(r=>{
-    const grouped = r.account===lastAccountName_;
-    lastAccountName_=r.account;
-    const row=el('div','acct'+(grouped?' grouped':''));
+  const ownerOrder_=[S.names[0], S.names[1], '공동'];
+  const ownerRank_=o=>{ const i=ownerOrder_.indexOf(o); return i<0?99:i; };
+  let lastOwner_=undefined;
+  S.assets.slice().sort((a,b)=> ownerRank_(a.owner)-ownerRank_(b.owner) || a.account.localeCompare(b.account,'ko')).forEach(r=>{
+    if(r.owner!==lastOwner_){
+      lastOwner_=r.owner;
+      const h=el('div'); h.style.cssText='font-size:.75rem;color:var(--muted);font-weight:600;margin:16px 0 2px';
+      h.textContent = r.owner || '소유자 없음';
+      list.appendChild(h);
+    }
+    const row=el('div','acct');
     const ocls = r.owner===S.names[0]?'me':(r.owner===S.names[1]?'you':'');
     const metaParts=[r.kind];
-    if(r.owner) metaParts.push(r.owner);
     if(r.liquid===false) metaParts.push('비유동');
     row.innerHTML='<span class="who'+(ocls?(' '+ocls):'')+'"></span>'+
-      '<div class="main">'+(grouped?'':'<div class="t">'+r.account+'</div>')+
+      '<div class="main"><div class="t">'+r.account+'</div>'+
       '<div class="m'+(r.kind==='부채'?' debt':'')+'">'+metaParts.join(' · ')+'</div></div>';
     const main=row.querySelector('.main');
     const inp=el('input'); inp.inputMode='numeric'; inp.value=comma(r.balance);
