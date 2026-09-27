@@ -161,12 +161,13 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .acct .who{width:3px;height:30px;border-radius:2px;flex:none;background:var(--faint)}
 .acct .who.me{background:var(--me)}
 .acct .who.you{background:var(--you)}
-.acct .main{min-width:0;flex:1;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.acct .t{font-size:.9375rem;font-weight:500;white-space:nowrap}
+.acct .main{min-width:0;flex:1}
+.acct .t{font-size:.9375rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acct .m{font-size:.75rem;color:var(--muted);margin-top:1px}
+.acct .m.debt{color:var(--over);font-weight:600}
 .acct input{margin-left:auto;text-align:right;width:38%;font-weight:600}
 .acct .x{flex:none;color:var(--faint);padding:4px 2px 4px 8px;font-size:.9375rem}
-.acct .purpose{flex:1 1 80px;min-width:60px;width:auto;margin-left:0;font-size:.8125rem;
+.acct .purpose{display:block;width:100%;margin-left:0;margin-top:2px;font-size:.8125rem;
   color:var(--muted);background:none;border:0;padding:0;font-weight:400;text-align:left}
 .acct .purpose::placeholder{color:var(--faint)}
 
@@ -406,6 +407,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
       <h2>순자산</h2>
       <p class="big num" id="a-net">—</p>
       <p class="sub" id="a-delta"></p>
+      <p class="sub" id="a-liquid-total"></p>
       <div class="chart" id="a-chart"></div>
       <div class="editor">
         <h2 id="a-month">잔액</h2>
@@ -414,8 +416,9 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <button class="wide ghost" id="a-add-toggle" style="margin-top:8px">+ 계좌 추가</button>
       </div>
       <div class="sheet" id="a-form">
-        <div class="sheet-head"><button id="a-form-close" aria-label="닫기">‹</button><h2>계좌 추가</h2></div>
+        <div class="sheet-head"><button id="a-form-close" aria-label="닫기">‹</button><h2 id="a-form-title">계좌 추가</h2></div>
         <div class="sheet-body">
+          <input type="hidden" id="a-id">
           <div class="field"><label>계좌 이름</label><input id="a-account" placeholder="예: 주택청약"></div>
           <div class="field"><label>종류</label>
             <select id="a-kind">
@@ -428,6 +431,8 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
           </div>
           <div class="field"><label>소유자</label><select id="a-owner"></select></div>
           <div class="field"><label>용도</label><input id="a-purpose" placeholder="선택, 예: 비상금"></div>
+          <div class="field"><label>가용자산</label><input type="checkbox" id="a-liquid" checked style="margin-left:auto;width:20px;height:20px"></div>
+          <p class="sub" style="margin:-6px 0 14px">지금 바로 꺼내 쓸 수 있는 돈이면 체크해두세요. 부동산·연금처럼 묶여있는 자산은 체크를 풀면 가용자산 합계에서 빠집니다.</p>
           <button class="wide" id="a-add-save">계좌 추가</button>
         </div>
       </div>
@@ -682,7 +687,7 @@ function sortTx_(list){
 function docToAsset_(doc){
   const a=doc.data();
   return { id:doc.id, ym:a.ym, account:a.account, kind:a.kind, balance:Number(a.balance)||0,
-    owner:a.owner||'', purpose:a.purpose||'' };
+    owner:a.owner||'', purpose:a.purpose||'', liquid:a.liquid!==false };
 }
 function docToFixed_(doc){
   const f=doc.data();
@@ -841,22 +846,29 @@ API.apiSaveBudget = async (pin, month, b) => {
 
 API.apiSaveAsset = async (pin, a, month) => {
   await checkPin_(pin);
+  const ASSET_KINDS=['예금','투자','연금','부동산','부채'];
   if(a.id){
     const patch={};
     if(a.balance!==undefined) patch.balance=Number(a.balance)||0;
     if(a.owner!==undefined) patch.owner=String(a.owner||'');
     if(a.purpose!==undefined) patch.purpose=String(a.purpose||'').slice(0,60);
+    if(a.account!==undefined) patch.account=String(a.account).trim();
+    if(a.kind!==undefined){
+      if(ASSET_KINDS.indexOf(a.kind)<0) throw new Error('종류가 올바르지 않습니다.');
+      patch.kind=a.kind;
+    }
+    if(a.liquid!==undefined) patch.liquid=!!a.liquid;
     await db.collection('assets').doc(a.id).update(patch);
     return Object.assign(await API.apiLoad(pin, month), { success:true });
   }
-  const ASSET_KINDS=['예금','투자','연금','부동산','부채'];
   if(ASSET_KINDS.indexOf(a.kind)<0) throw new Error('종류가 올바르지 않습니다.');
+  const owner=String(a.owner||'');
   const dupSnap = await db.collection('assets')
-    .where('ym','==',a.ym).where('account','==',String(a.account).trim()).get();
-  if(!dupSnap.empty) return Object.assign(await API.apiLoad(pin, month), { success:false, message:'같은 이름의 계좌가 이미 있습니다.' });
+    .where('ym','==',a.ym).where('account','==',String(a.account).trim()).where('owner','==',owner).get();
+  if(!dupSnap.empty) return Object.assign(await API.apiLoad(pin, month), { success:false, message:'같은 이름·소유자의 계좌가 이미 있습니다.' });
   await db.collection('assets').add({
     ym:a.ym, account:String(a.account).trim(), kind:a.kind, balance:Number(a.balance)||0,
-    owner:String(a.owner||''), purpose:String(a.purpose||'').slice(0,60),
+    owner:owner, purpose:String(a.purpose||'').slice(0,60), liquid:a.liquid===undefined?true:!!a.liquid,
   });
   return Object.assign(await API.apiLoad(pin, month), { success:true });
 };
@@ -874,14 +886,14 @@ API.apiCopyAssets = async (pin, month) => {
     db.collection('assets').where('ym','==',month).get(),
     db.collection('assets').where('ym','==',prev).get(),
   ]);
-  const have = curSnap.docs.map(d=>d.data().account);
-  const src = prevSnap.docs.map(d=>d.data()).filter(a=>have.indexOf(a.account)<0);
+  const have = curSnap.docs.map(d=>{ const x=d.data(); return x.account+'|'+(x.owner||''); });
+  const src = prevSnap.docs.map(d=>d.data()).filter(a=>have.indexOf(a.account+'|'+(a.owner||''))<0);
   if(!src.length) return Object.assign(await API.apiLoad(pin, month), { success:false, message:'가져올 지난달 기록이 없습니다.' });
   const batch = db.batch();
   src.forEach(a=>{
     const ref = db.collection('assets').doc();
     batch.set(ref, { ym:month, account:a.account, kind:a.kind, balance:Number(a.balance)||0,
-      owner:a.owner||'', purpose:a.purpose||'' });
+      owner:a.owner||'', purpose:a.purpose||'', liquid:a.liquid!==false });
   });
   await batch.commit();
   return Object.assign(await API.apiLoad(pin, month), { success:true, count:src.length });
@@ -1591,6 +1603,9 @@ function renderAssets(){
       (d>=0?'+':'')+comma(d)+'원</span>';
   } else $('#a-delta').textContent = S.assets.length?'':'아래에서 계좌 잔액을 넣어주세요';
 
+  const liquidTotal=S.assets.filter(r=>r.liquid!==false && r.kind!=='부채').reduce((a,r)=>a+r.balance,0);
+  $('#a-liquid-total').textContent = S.assets.length ? '가용자산 '+won(liquidTotal) : '';
+
   drawChart(S.series);
   $('#a-month').textContent=(+S.month.slice(5,7))+'월 잔액';
 
@@ -1603,11 +1618,12 @@ function renderAssets(){
   S.assets.slice().sort((a,b)=>(a.kind==='부채')-(b.kind==='부채')).forEach(r=>{
     const row=el('div','acct');
     const ocls = r.owner===S.names[0]?'me':(r.owner===S.names[1]?'you':'');
+    const metaParts=[r.kind];
+    if(r.owner) metaParts.push(r.owner);
+    if(r.liquid===false) metaParts.push('비유동');
     row.innerHTML='<span class="who'+(ocls?(' '+ocls):'')+'"></span>'+
-      '<div class="main"><span class="t">'+r.account+
-      (r.kind==='부채'?' <span style="color:var(--over);font-weight:600">· 부채</span>':'')+
-      (r.owner?' <span style="color:var(--muted);font-weight:400;font-size:.8125rem">· '+r.owner+'</span>':'')+
-      '</span></div>';
+      '<div class="main"><div class="t">'+r.account+'</div>'+
+      '<div class="m'+(r.kind==='부채'?' debt':'')+'">'+metaParts.join(' · ')+'</div></div>';
     const main=row.querySelector('.main');
     const inp=el('input'); inp.inputMode='numeric'; inp.value=comma(r.balance);
     inp.oninput=formatNumericInput_;
@@ -1617,13 +1633,15 @@ function renderAssets(){
       try{ applyLoad(await call('apiSaveAsset',S.pin,{id:r.id,balance:v},S.month)); }
       catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
+    const edit=el('button','x'); edit.textContent='✎'; edit.setAttribute('aria-label','수정');
+    edit.onclick=()=>openAssetForm(r);
     const x=el('button','x'); x.textContent='✕';
     x.onclick=async()=>{
       if(!confirm("'"+r.account+"' 계좌를 이 달 목록에서 지울까요?")) return;
       try{ applyLoad(await call('apiDeleteAsset',S.pin,r.id,S.month)); }
       catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
     };
-    row.appendChild(inp); row.appendChild(x);
+    row.appendChild(inp); row.appendChild(edit); row.appendChild(x);
 
     if(r.purpose){
       const purpose=el('input','purpose');
@@ -1639,25 +1657,41 @@ function renderAssets(){
     list.appendChild(row);
   });
 }
-$('#a-add-toggle').onclick=()=>{
-  $('#a-account').value=''; $('#a-kind').value='예금'; $('#a-purpose').value='';
+function openAssetForm(r){
+  $('#a-id').value=r?r.id:'';
+  $('#a-account').value=r?r.account:'';
+  $('#a-kind').value=r?r.kind:'예금';
+  $('#a-purpose').value=r?r.purpose:'';
   buildOwnerSelect($('#a-owner'));
+  if(r) $('#a-owner').value=r.owner;
+  $('#a-liquid').checked = r ? r.liquid!==false : true;
+  $('#a-form-title').textContent = r?'계좌 수정':'계좌 추가';
+  $('#a-add-save').textContent = r?'저장':'계좌 추가';
   openSheet('#a-form');
-};
+}
+$('#a-add-toggle').onclick=()=>openAssetForm(null);
+$('#a-kind').addEventListener('change', ()=>{
+  $('#a-liquid').checked = ['예금','투자'].indexOf($('#a-kind').value)>=0;
+});
 $('#a-form-close').onclick=()=>closeSheet('#a-form');
 $('#a-add-save').onclick=async()=>{
+  const id=$('#a-id').value;
   const account=$('#a-account').value.trim();
   if(!account){ toast('계좌 이름을 입력하세요'); return; }
   const kind=$('#a-kind').value;
   const owner=$('#a-owner').value;
   const purpose=$('#a-purpose').value.trim();
+  const liquid=$('#a-liquid').checked;
   $('#a-add-save').disabled=true;
   try{
-    const r=await call('apiSaveAsset',S.pin,{ym:S.month,account:account,kind:kind,balance:0,owner:owner,purpose:purpose},S.month);
-    toast(r.success?'추가됨':r.message);
+    const payload = id
+      ? {id:id, account:account, kind:kind, owner:owner, purpose:purpose, liquid:liquid}
+      : {ym:S.month, account:account, kind:kind, balance:0, owner:owner, purpose:purpose, liquid:liquid};
+    const r=await call('apiSaveAsset',S.pin,payload,S.month);
+    toast(r.success?(id?'저장됨':'추가됨'):r.message);
     if(r.success) closeSheet('#a-form');
     applyLoad(r);
-  }catch(e){ toast('추가하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
+  }catch(e){ toast((id?'저장':'추가')+'하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
   $('#a-add-save').disabled=false;
 };
 $('#a-copy').onclick=async()=>{
