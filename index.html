@@ -415,29 +415,32 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <button class="wide ghost" id="a-copy">지난달 계좌 그대로 가져오기</button>
         <button class="wide ghost" id="a-add-toggle" style="margin-top:8px">+ 계좌 추가</button>
       </div>
-      <div class="sheet" id="a-form">
-        <div class="sheet-head"><button id="a-form-close" aria-label="닫기">‹</button><h2 id="a-form-title">계좌 추가</h2></div>
-        <div class="sheet-body">
-          <input type="hidden" id="a-id">
-          <div class="field"><label>계좌 이름</label><input id="a-account" placeholder="예: 주택청약"></div>
-          <div class="field"><label>종류</label>
-            <select id="a-kind">
-              <option value="예금">예금</option>
-              <option value="투자">투자</option>
-              <option value="연금">연금</option>
-              <option value="부동산">부동산</option>
-              <option value="부채">부채</option>
-            </select>
-          </div>
-          <div class="field"><label>소유자</label><select id="a-owner"></select></div>
-          <div class="field"><label>용도</label><input id="a-purpose" placeholder="선택, 예: 비상금"></div>
-          <div class="field"><label>가용자산</label><input type="checkbox" id="a-liquid" checked style="margin-left:auto;width:20px;height:20px"></div>
-          <p class="sub" style="margin:-6px 0 14px">지금 바로 꺼내 쓸 수 있는 돈이면 체크해두세요. 부동산·연금처럼 묶여있는 자산은 체크를 풀면 가용자산 합계에서 빠집니다.</p>
-          <button class="wide" id="a-add-save">계좌 추가</button>
-        </div>
-      </div>
     </div>
   </section>
+
+  <!-- 계좌 추가/수정 -->
+  <div class="sheet" id="a-form">
+    <div class="sheet-head"><button id="a-form-close" aria-label="닫기">‹</button><h2 id="a-form-title">계좌 추가</h2></div>
+    <div class="sheet-body">
+      <input type="hidden" id="a-id">
+      <div class="field"><label>계좌 이름</label><input id="a-account" placeholder="예: 주택청약"></div>
+      <div class="field"><label>종류</label>
+        <select id="a-kind">
+          <option value="예금">예금</option>
+          <option value="투자">투자</option>
+          <option value="연금">연금</option>
+          <option value="복지포인트">복지포인트</option>
+          <option value="부동산">부동산</option>
+          <option value="부채">부채</option>
+        </select>
+      </div>
+      <div class="field"><label>소유자</label><select id="a-owner"></select></div>
+      <div class="field"><label>용도</label><input id="a-purpose" placeholder="선택, 예: 비상금"></div>
+      <div class="field"><label>가용자산</label><input type="checkbox" id="a-liquid" checked style="margin-left:auto;width:20px;height:20px"></div>
+      <p class="sub" style="margin:-6px 0 14px">지금 바로 꺼내 쓸 수 있는 돈이면 체크해두세요. 부동산·연금·복지포인트처럼 묶여있거나 쓰임이 정해진 자산은 체크를 풀면 가용자산 합계에서 빠집니다.</p>
+      <button class="wide" id="a-add-save">계좌 추가</button>
+    </div>
+  </div>
 
   <section class="screen" id="log">
     <div class="body">
@@ -846,7 +849,7 @@ API.apiSaveBudget = async (pin, month, b) => {
 
 API.apiSaveAsset = async (pin, a, month) => {
   await checkPin_(pin);
-  const ASSET_KINDS=['예금','투자','연금','부동산','부채'];
+  const ASSET_KINDS=['예금','투자','연금','복지포인트','부동산','부채'];
   if(a.id){
     const patch={};
     if(a.balance!==undefined) patch.balance=Number(a.balance)||0;
@@ -1207,7 +1210,7 @@ function setupSheetSwipe(sheet){
 }
 document.querySelectorAll('.sheet').forEach(setupSheetSwipe);
 
-const ASSET_KINDS=['예금','투자','연금','부동산','부채'];
+const ASSET_KINDS=['예금','투자','연금','복지포인트','부동산','부채'];
 
 const S={ pin:'', who:'', names:['나','배우자'], month:'',
           tx:[], recent:[], budget:null, assets:[], series:[], trend:[],
