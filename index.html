@@ -89,6 +89,7 @@ button{cursor:pointer}
 .commit{flex:none;display:flex;gap:8px;padding:12px 0 calc(12px + var(--pad))}
 .commit input{flex:1;min-width:0;background:var(--surface);border-radius:var(--r-lg);padding:0 15px;font-size:.9375rem}
 .commit input::placeholder{color:var(--faint)}
+.commit select{flex:none;background:var(--surface);border-radius:var(--r-lg);padding:0 8px;font-size:.8125rem;font-weight:600;max-width:78px}
 .commit button{flex:none;padding:15px 26px;border-radius:var(--r-lg);background:var(--ink);
   color:#fff;font-weight:700;font-size:.9375rem;transition:transform var(--tap),opacity var(--tap)}
 .commit button:active{transform:scale(.97)}
@@ -142,6 +143,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .goal-stats{grid-template-columns:repeat(2,1fr);margin-top:8px}
 
 .editor{margin-top:28px;border-top:1px solid var(--line);padding-top:18px}
+.editor > .field:last-child{border-bottom:0}
 .field{display:flex;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
 .field label{font-size:.9375rem;font-weight:500}
 .field input{margin-left:auto;text-align:right;width:52%;font-weight:600}
@@ -193,6 +195,8 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .row .edit-box .ef-row{display:flex;gap:8px}
 .row .edit-box input{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 12px;font-size:.875rem;box-sizing:border-box}
 .row .edit-box .ef-amt{text-align:right}
+.row .edit-box select{flex:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 8px;font-size:.875rem}
+.row .who.joint{background:var(--faint)}
 .row .edit-box .ef-actions{display:flex;gap:8px;margin-top:2px}
 .row .edit-box .ef-actions button{flex:1;padding:10px;border-radius:var(--r-sm);font-weight:700;font-size:.8125rem}
 .row .edit-box .ef-save{background:var(--ink);color:#fff}
@@ -246,7 +250,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .cmp-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:.8125rem}
 .cmp-row.cmp-head{color:var(--muted);font-weight:600;font-size:.75rem}
 .cmp-cat{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cmp-v{width:76px;flex:none;text-align:right;font-variant-numeric:tabular-nums}
+.cmp-v{width:64px;flex:none;text-align:right;font-variant-numeric:tabular-nums}
 .tax-card{padding:14px;background:var(--surface);border-radius:var(--r-lg);margin-bottom:10px}
 .tax-card b{font-size:.9375rem}
 .tax-card .sub{margin:6px 0 0}
@@ -364,6 +368,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
       </div>
     </div>
     <div class="commit">
+      <select id="entry-owner" aria-label="소유자"></select>
       <input id="note" placeholder="메모 (선택)" enterkeyhint="done">
       <button id="save" disabled>기록</button>
     </div>
@@ -396,7 +401,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <p class="sub" style="margin:0 0 10px">본인 이름을 탭하면 정산 완료로 표시돼요</p>
         <div id="settle-status"></div>
         <div id="settle-banner" hidden></div>
-        <h2 style="margin-top:26px">카테고리별 개인 지출 비교</h2>
+        <h2 style="margin-top:26px">카테고리별 지출 비교</h2>
         <div id="settle-compare"></div>
       </div>
     </div>
@@ -832,9 +837,9 @@ API.apiEditTx = async (pin, id, t, month) => {
   if(!(Number(t.amount)>0)) throw new Error('금액을 확인하세요.');
   const date = t.date || todayStr();
   const ym = date.slice(0,7);
-  await db.collection('tx').doc(id).update({
-    date, amount:Number(t.amount), note:String(t.note||'').slice(0,200), ym,
-  });
+  const patch = { date, amount:Number(t.amount), note:String(t.note||'').slice(0,200), ym };
+  if(t.who!==undefined) patch.who=String(t.who);
+  await db.collection('tx').doc(id).update(patch);
   return Object.assign(await API.apiLoad(pin, month), { success:true });
 };
 
@@ -1417,17 +1422,18 @@ $('#save').onclick=async()=>{
   const kind=S.entryKind, cat=S.cat;
   const goalId = kind==='저축' ? $('#entry-goal').value : '';
   const date=$('#entry-date').value || todayStr();
+  const owner=$('#entry-owner').value || S.who;
   const prevDigits=S.digits, prevNote=$('#note').value;
   $('#save').disabled=true;
-  S.digits=''; $('#note').value=''; paintAmount();
+  S.digits=''; $('#note').value=''; $('#entry-owner').value=S.who; paintAmount();
   toast(cat+' '+won(amount)+' 기록됨');
   try{
     const d = await call('apiAddTx', S.pin, {amount:amount, kind:kind, category:cat,
-      who:S.who, note:note, date:date, goalId:goalId});
+      who:owner, note:note, date:date, goalId:goalId});
     $('#entry-date').value=todayStr();
     applyLoad(d);
   }catch(e){
-    S.digits=prevDigits; $('#note').value=prevNote; paintAmount();
+    S.digits=prevDigits; $('#note').value=prevNote; $('#entry-owner').value=owner; paintAmount();
     toast('저장하지 못했습니다. 다시 시도하세요.'+(e&&e.message?(' — '+e.message):''));
   }
 };
@@ -1447,9 +1453,6 @@ function renderMonth(){
     고정지출:sumBy(t=>t.category==='고정지출'),
     생활비:sumBy(t=>t.category==='생활비'),
   };
-  /* 용돈은 내역을 남기지 않고 지급과 동시에 전액 소비로 처리합니다. */
-  const spentAllow1=Number(b.allowance1)||0;
-  const spentAllow2=Number(b.allowance2)||0;
   const income=sumBy(t=>t.kind==='수입');
   const expense=sumBy(t=>t.kind==='지출');
   const saved=sumBy(t=>t.kind==='저축');
@@ -1468,8 +1471,6 @@ function renderMonth(){
   [
     ['고정지출', b.fixed, spent.고정지출],
     ['생활비', b.living, spent.생활비],
-    [S.names[0]+' 용돈', b.allowance1, spentAllow1],
-    [S.names[1]+' 용돈', b.allowance2, spentAllow2],
   ].forEach(([k,bud,used])=>{
     const budget=Number(bud)||0;
     const ratio=budget>0?used/budget:0;
@@ -1576,7 +1577,8 @@ function renderCompare(){
   const byCat={};
   S.tx.forEach(t=>{
     if(!byCat[t.category]) byCat[t.category]={};
-    byCat[t.category][t.who]=(byCat[t.category][t.who]||0)+t.amount;
+    const w = (t.who===S.names[0]||t.who===S.names[1]) ? t.who : '공동';
+    byCat[t.category][w]=(byCat[t.category][w]||0)+t.amount;
   });
   const cats=Object.keys(byCat).sort((a,b)=>{
     const ta=Object.values(byCat[a]).reduce((x,y)=>x+y,0);
@@ -1585,11 +1587,12 @@ function renderCompare(){
   });
   if(!cats.length){ box.innerHTML='<p class="sub">이 달 기록이 없습니다</p>'; return; }
   let html='<div class="cmp-row cmp-head"><span class="cmp-cat"></span>'+
-    '<span class="cmp-v">'+S.names[0]+'</span><span class="cmp-v">'+S.names[1]+'</span></div>';
+    '<span class="cmp-v">'+S.names[0]+'</span><span class="cmp-v">'+S.names[1]+'</span><span class="cmp-v">공동</span></div>';
   cats.forEach(cat=>{
-    const v1=byCat[cat][S.names[0]]||0, v2=byCat[cat][S.names[1]]||0;
+    const v1=byCat[cat][S.names[0]]||0, v2=byCat[cat][S.names[1]]||0, v3=byCat[cat]['공동']||0;
     html+='<div class="cmp-row"><span class="cmp-cat">'+cat+'</span>'+
-      '<span class="cmp-v">'+comma(v1)+'</span><span class="cmp-v">'+comma(v2)+'</span></div>';
+      '<span class="cmp-v">'+comma(v1)+'</span><span class="cmp-v">'+comma(v2)+'</span>'+
+      '<span class="cmp-v">'+comma(v3)+'</span></div>';
   });
   box.innerHTML=html;
 }
@@ -1743,7 +1746,7 @@ function buildLogFilters(){
 
   const whoSel=$('#l-who');
   whoSel.innerHTML='<option value="all">인원</option>'+
-    S.names.map(n=>'<option value="'+n+'">'+n+'</option>').join('');
+    ownerOptions().map(n=>'<option value="'+n+'">'+n+'</option>').join('');
   whoSel.value=S.logFilter.who;
 
   const catSel=$('#l-cat');
@@ -1802,7 +1805,8 @@ function renderLog(){
 function buildTxRow(t){
   const row=el('div','row');
   const metaLine = t.note ? (t.category+' · '+t.who) : t.who;
-  row.innerHTML='<span class="who'+(t.who===S.names[1]?' you':'')+'"></span>'+
+  const whoCls = t.who===S.names[1] ? ' you' : (t.who===S.names[0] ? '' : ' joint');
+  row.innerHTML='<span class="who'+whoCls+'"></span>'+
     '<div class="main"><div class="t">'+(t.note||t.category)+'</div>'+
     '<div class="m">'+metaLine+'</div></div>'+
     '<span class="amt num '+t.kind+'">'+(t.kind==='수입'?'+':t.kind==='지출'?'-':'')+comma(t.amount)+'</span>';
@@ -1811,19 +1815,22 @@ function buildTxRow(t){
   editBox.innerHTML=
     '<div class="ef-row"><input type="date" class="ef-date">'+
     '<input inputmode="numeric" class="ef-amt" placeholder="금액"></div>'+
-    '<input class="ef-note" placeholder="메모">'+
+    '<div class="ef-row"><select class="ef-who"></select><input class="ef-note" placeholder="메모"></div>'+
     '<div class="ef-actions"><button class="ef-save">저장</button><button class="ef-del">삭제</button></div>';
   const dateInp=editBox.querySelector('.ef-date'); dateInp.value=t.date;
   const amtInp=editBox.querySelector('.ef-amt'); amtInp.value=comma(t.amount);
   amtInp.oninput=formatNumericInput_;
   const noteInp=editBox.querySelector('.ef-note'); noteInp.value=t.note||'';
+  const whoSel=editBox.querySelector('.ef-who');
+  ownerOptions().forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; whoSel.appendChild(o); });
+  whoSel.value = ownerOptions().indexOf(t.who)>=0 ? t.who : '공동';
 
   editBox.querySelector('.ef-save').onclick=async e=>{
     e.stopPropagation();
     const amount=Number(amtInp.value.replace(/[^0-9]/g,'')||0);
     if(!dateInp.value || amount<=0){ toast('날짜와 금액을 확인하세요'); return; }
     try{
-      const d = await call('apiEditTx', S.pin, t.id, {date:dateInp.value, amount:amount, note:noteInp.value.trim()}, S.month);
+      const d = await call('apiEditTx', S.pin, t.id, {date:dateInp.value, amount:amount, note:noteInp.value.trim(), who:whoSel.value}, S.month);
       toast('수정됨'); applyLoad(d); renderCalendar();
     }catch(err){ toast('수정하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
   };
@@ -2378,7 +2385,7 @@ function renderAll(){
   buildChips(); buildGoalRow();
   renderStrip(); renderMonth(); renderAssets();
   buildLogFilters(); renderLog(); renderCalendar();
-  buildOwnerSelect($('#fx-owner'), true); buildOwnerSelect($('#cd-owner'), true);
+  buildOwnerSelect($('#fx-owner'), true); buildOwnerSelect($('#cd-owner'), true); buildOwnerSelect($('#entry-owner'), true);
   renderFixed(); renderCards(); renderCategories(); renderGoals(); renderFixedSavings();
   renderSettle(); renderCompare();
 }
