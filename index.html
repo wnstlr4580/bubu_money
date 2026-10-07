@@ -556,7 +556,9 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
       <input type="hidden" id="gl-id">
       <div class="field"><label>이름</label><input id="gl-name" placeholder="예: 자동차"></div>
       <div class="field"><label>목표금액</label><input id="gl-target" inputmode="numeric" placeholder="0"></div>
+      <div class="field"><label>달성금액</label><input id="gl-achieved" inputmode="numeric" placeholder="0"></div>
       <div class="field"><label>목표 날짜</label><input type="month" id="gl-date"></div>
+      <p class="sub" style="margin:4px 0 10px">달성금액은 지금까지 이 목표로 모은 돈이에요. 이미 모아둔 돈이 있으면 여기에 적고, 이후 저축할 때 이 목표를 고르면 자동으로 더해집니다.</p>
       <div class="field"><label>메모</label><input id="gl-memo" placeholder="선택"></div>
       <button class="wide" id="gl-save">저장</button>
     </div>
@@ -715,7 +717,7 @@ function docToCategory_(doc){
 }
 function docToGoal_(doc){
   const g=doc.data();
-  return { id:doc.id, name:g.name, target:Number(g.target)||0, memo:g.memo||'', targetDate:g.targetDate||'' };
+  return { id:doc.id, name:g.name, target:Number(g.target)||0, memo:g.memo||'', targetDate:g.targetDate||'', base:Number(g.base)||0 };
 }
 function docToFixedSaving_(doc){
   const f=doc.data();
@@ -1071,13 +1073,13 @@ API.apiSaveGoal = async (pin, g) => {
   if(g.id){
     await db.collection('goals').doc(g.id).update({
       name:String(g.name).trim().slice(0,40), target:Number(g.target)||0, memo:String(g.memo||'').slice(0,200),
-      targetDate:String(g.targetDate||''),
+      targetDate:String(g.targetDate||''), base:Number(g.base)||0,
     });
     return Object.assign(await API.apiLoadExtras(pin), { success:true });
   }
   await db.collection('goals').add({
     name:String(g.name).trim().slice(0,40), target:Number(g.target)||0, memo:String(g.memo||'').slice(0,200),
-    targetDate:String(g.targetDate||''),
+    targetDate:String(g.targetDate||''), base:Number(g.base)||0,
   });
   return Object.assign(await API.apiLoadExtras(pin), { success:true });
 };
@@ -2249,18 +2251,18 @@ function renderGoals(){
     list.appendChild(p); return;
   }
   S.goals.forEach(g=>{
-    const saved=S.goalProgress[g.id]||0;
+    const saved=goalAchieved_(g);
     const ratio = g.target>0 ? saved/g.target : 0;
     const wrap=el('div');
     wrap.style.cssText='padding:14px 0;border-bottom:1px solid var(--line)';
     const bar=el('div','bar');
-    bar.innerHTML='<div class="top"><span>'+g.name+'</span><em class="num">'+comma(saved)+
-      (g.target>0?' / '+comma(g.target):'')+'</em></div>'+
+    bar.innerHTML='<div class="top"><span>'+g.name+'</span><em class="num">'+
+      (g.target>0?Math.floor(ratio*100)+'%':comma(saved)+'원')+'</em></div>'+
       '<div class="track"><div class="fill" style="width:'+(Math.min(ratio,1)*100)+'%"></div></div>';
     wrap.appendChild(bar);
     if(g.target>0){
       const stats=el('div','stats goal-stats');
-      let cells='<div><span>목표금액</span><b class="num">'+comma(g.target)+'원</b></div>';
+      let cells='<div><span>달성 / 목표</span><b class="num">'+comma(saved)+' / '+comma(g.target)+'원</b></div>';
       if(g.targetDate){
         const dateLabel=g.targetDate.replace('-','.');
         if(saved>=g.target){
@@ -2300,6 +2302,7 @@ function renderGoals(){
     edit.onclick=()=>{
       $('#gl-id').value=g.id; $('#gl-name').value=g.name;
       $('#gl-target').value=g.target?comma(g.target):''; $('#gl-date').value=g.targetDate||'';
+      const ach=goalAchieved_(g); $('#gl-achieved').value=ach?comma(ach):'';
       $('#gl-memo').value=g.memo||'';
       openSheet('#gl-form');
     };
@@ -2314,6 +2317,8 @@ function renderGoals(){
     list.appendChild(wrap);
   });
 }
+/** 달성금액 = 직접 입력해 둔 금액(base) + 이 목표로 기록한 저축 합계 */
+function goalAchieved_(g){ return (Number(g.base)||0) + (S.goalProgress[g.id]||0); }
 async function loadGoalProgress(){
   try{
     const r = await call('apiGoalProgress', S.pin);
@@ -2322,22 +2327,24 @@ async function loadGoalProgress(){
   }catch(e){ toast('진행률을 불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
 }
 $('#gl-toggle').onclick=()=>{
-  $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-date').value=''; $('#gl-memo').value='';
+  $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-achieved').value=''; $('#gl-date').value=''; $('#gl-memo').value='';
   openSheet('#gl-form');
 };
 $('#gl-form-close').onclick=()=>closeSheet('#gl-form');
 $('#gl-target').addEventListener('input', formatNumericInput_);
+$('#gl-achieved').addEventListener('input', formatNumericInput_);
 $('#gl-save').onclick=async()=>{
   const id=$('#gl-id').value;
   const name=$('#gl-name').value.trim();
   const target=digitsOf('#gl-target');
   const targetDate=$('#gl-date').value;
   const memo=$('#gl-memo').value.trim();
+  const base=digitsOf('#gl-achieved') - (id ? (S.goalProgress[id]||0) : 0);
   if(!name){ toast('이름을 입력하세요'); return; }
   $('#gl-save').disabled=true;
   try{
-    const d = await call('apiSaveGoal',S.pin,{id:id||undefined, name:name, target:target, targetDate:targetDate, memo:memo});
-    $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-date').value=''; $('#gl-memo').value='';
+    const d = await call('apiSaveGoal',S.pin,{id:id||undefined, name:name, target:target, targetDate:targetDate, memo:memo, base:base});
+    $('#gl-id').value=''; $('#gl-name').value=''; $('#gl-target').value=''; $('#gl-achieved').value=''; $('#gl-date').value=''; $('#gl-memo').value='';
     closeSheet('#gl-form');
     toast('저장됨'); applyExtras(d);
     loadGoalProgress();
