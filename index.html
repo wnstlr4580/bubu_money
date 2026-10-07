@@ -207,13 +207,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .empty{text-align:center;padding:52px 24px;color:var(--muted);font-size:.9375rem}
 .empty b{display:block;font-weight:600;color:var(--ink);margin-bottom:6px}
 
-.card{padding:14px 0;border-bottom:1px solid var(--line)}
-.card .top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.card .top b{font-size:.9375rem}
-.card .top .purpose{font-size:.75rem;color:var(--muted)}
-.card .top .min{margin-left:auto;font-size:.8125rem;color:var(--muted)}
-.card .benefit{font-size:.8125rem;color:var(--muted);margin-top:5px}
-.card .meta{font-size:.75rem;color:var(--faint);margin-top:5px}
 
 .fx-summary{display:flex;align-items:center;justify-content:space-between;background:var(--surface);
   border-radius:var(--r-lg);padding:16px 18px;margin-bottom:14px}
@@ -521,33 +514,13 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     </div>
   </div>
 
-  <!-- 카드·저축목표 관리 (자산 탭 ⚙에서 열림) -->
-  <div class="sheet" id="card-sheet">
-    <div class="sheet-head"><button id="card-sheet-close" aria-label="닫기">‹</button><h2>카드관리</h2></div>
-    <div class="sheet-body">
-      <h2>등록된 카드</h2>
-      <div id="cd-list"></div>
-      <button class="wide ghost" id="cd-toggle">+ 새 카드 추가</button>
-    </div>
-  </div>
+  <!-- 저축목표 -->
   <div class="sheet" id="goal-sheet">
     <div class="sheet-head"><button id="goal-sheet-close" aria-label="닫기">‹</button><h2>저축목표</h2></div>
     <div class="sheet-body">
       <h2>저축 목표</h2>
       <div id="gl-list"></div>
       <button class="wide ghost" id="gl-toggle">+ 새 목표 추가</button>
-    </div>
-  </div>
-  <div class="sheet top" id="cd-form">
-    <div class="sheet-head"><button id="cd-form-close" aria-label="닫기">‹</button><h2>카드 추가</h2></div>
-    <div class="sheet-body">
-      <div class="field"><label>카드명</label><input id="cd-name" placeholder="예: OO카드"></div>
-      <div class="field"><label>목적</label><input id="cd-purpose" placeholder="예: 주유·마트"></div>
-      <div class="field"><label>전월실적</label><input id="cd-min" inputmode="numeric" placeholder="0"></div>
-      <div class="field"><label>소유자</label><select id="cd-owner"></select></div>
-      <div class="field"><label>혜택</label><input id="cd-benefit" placeholder="예: 주유 10% 할인"></div>
-      <div class="field"><label>메모</label><input id="cd-memo" placeholder="선택"></div>
-      <button class="wide" id="cd-add">카드 추가</button>
     </div>
   </div>
   <div class="sheet top" id="gl-form">
@@ -616,7 +589,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     <div class="sheet-body">
       <button class="wide ghost" data-open="#fx-sheet">고정지출 관리</button>
       <button class="wide ghost" data-open="#fs-sheet" style="margin-top:10px">고정저축 관리</button>
-      <button class="wide ghost" data-open="#card-sheet" style="margin-top:10px">카드관리</button>
       <button class="wide ghost" data-open="#goal-sheet" style="margin-top:10px">저축목표</button>
       <button class="wide ghost" data-open="#cat-sheet" style="margin-top:10px">카테고리 관리</button>
       <button class="wide ghost" data-open="#year-sheet" style="margin-top:10px">연말정산 · 연간결산</button>
@@ -706,11 +678,6 @@ function docToFixed_(doc){
   return { id:doc.id, item:f.item, amount:Number(f.amount)||0, day:Number(f.day)||1,
     owner:f.owner||'', memo:f.memo||'', active:f.active!==false, lastMonth:f.lastMonth||'' };
 }
-function docToCard_(doc){
-  const c=doc.data();
-  return { id:doc.id, name:c.name, purpose:c.purpose||'', benefit:c.benefit||'',
-    minSpend:Number(c.minSpend)||0, owner:c.owner||'', memo:c.memo||'' };
-}
 function docToCategory_(doc){
   const c=doc.data();
   return { id:doc.id, name:c.name, kind:c.kind, order:Number(c.order)||0, irregular:!!c.irregular };
@@ -788,14 +755,13 @@ API.apiLoad = async (pin, month) => {
 
 API.apiLoadExtras = async (pin) => {
   await checkPin_(pin);
-  const [fxSnap, cdSnap, catSnap, glSnap, fsSnap] = await Promise.all([
-    db.collection('fixed').get(), db.collection('cards').get(), db.collection('categories').get(),
+  const [fxSnap, catSnap, glSnap, fsSnap] = await Promise.all([
+    db.collection('fixed').get(), db.collection('categories').get(),
     db.collection('goals').get(), db.collection('fixedSavings').get(),
   ]);
   return {
     ok:true,
     fixedExpenses: fxSnap.docs.map(docToFixed_),
-    cards: cdSnap.docs.map(docToCard_),
     categories: catSnap.docs.map(docToCategory_).sort((a,b)=>a.order-b.order),
     goals: glSnap.docs.map(docToGoal_),
     fixedSavings: fsSnap.docs.map(docToFixedSaving_),
@@ -1016,31 +982,6 @@ API.apiDeleteFixedSaving = async (pin, id) => {
   return Object.assign(await API.apiLoadExtras(pin), { success:true });
 };
 
-API.apiSaveCard = async (pin, c) => {
-  await checkPin_(pin);
-  if(c.id){
-    await db.collection('cards').doc(c.id).update({
-      name:String(c.name||'').slice(0,40), purpose:String(c.purpose||'').slice(0,40),
-      benefit:String(c.benefit||'').slice(0,300), minSpend:Number(c.minSpend)||0,
-      owner:String(c.owner||''), memo:String(c.memo||'').slice(0,200),
-    });
-    return Object.assign(await API.apiLoadExtras(pin), { success:true });
-  }
-  if(!c.name) throw new Error('카드 이름을 입력하세요.');
-  await db.collection('cards').add({
-    name:String(c.name).slice(0,40), purpose:String(c.purpose||'').slice(0,40),
-    benefit:String(c.benefit||'').slice(0,300), minSpend:Number(c.minSpend)||0,
-    owner:String(c.owner||''), memo:String(c.memo||'').slice(0,200),
-  });
-  return Object.assign(await API.apiLoadExtras(pin), { success:true });
-};
-
-API.apiDeleteCard = async (pin, id) => {
-  await checkPin_(pin);
-  await db.collection('cards').doc(id).delete();
-  return Object.assign(await API.apiLoadExtras(pin), { success:true });
-};
-
 API.apiSaveCategory = async (pin, c) => {
   await checkPin_(pin);
   if(['지출','수입','저축'].indexOf(c.kind)<0) throw new Error('구분이 올바르지 않습니다.');
@@ -1231,7 +1172,7 @@ const ASSET_KINDS=['예금','투자','연금','복지포인트','부동산','부
 
 const S={ pin:'', who:'', names:['나','배우자'], rates:[0,0], month:'',
           tx:[], recent:[], budget:null, assets:[], series:[], trend:[],
-          fixedExpenses:[], cards:[], categories:[], goals:[], goalProgress:{}, goalRate:{}, fixedSavings:[],
+          fixedExpenses:[], categories:[], goals:[], goalProgress:{}, goalRate:{}, fixedSavings:[],
           entryKind:'지출', cat:'', digits:'', goal:'',
           logFilter:{kind:'all', who:'all', cat:'all', q:''}, searchResult:null,
           logView:'list', calSelDate:null,
@@ -1340,7 +1281,7 @@ function applyLoad(d){
   loadSettlement();
 }
 function applyExtras(d){
-  S.fixedExpenses=d.fixedExpenses||[]; S.cards=d.cards||[]; S.categories=d.categories||[];
+  S.fixedExpenses=d.fixedExpenses||[]; S.categories=d.categories||[];
   S.goals=d.goals||[]; S.fixedSavings=d.fixedSavings||[];
   renderAll();
 }
@@ -1354,7 +1295,7 @@ async function load(){
   try{ applyLoad(await call('apiLoad', S.pin, S.month)); return true; }
   catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); return false; }
 }
-/** 카테고리·고정지출·카드처럼 자주 안 바뀌는 것만 불러옵니다 (앱을 켤 때만 호출). */
+/** 카테고리·고정지출처럼 자주 안 바뀌는 것만 불러옵니다 (앱을 켤 때만 호출). */
 async function loadExtras(){
   try{ applyExtras(await call('apiLoadExtras', S.pin)); return true; }
   catch(e){ toast('불러오지 못했습니다. 잠시 후 다시 시도하세요.'+(e&&e.message?(' — '+e.message):'')); return false; }
@@ -1552,7 +1493,7 @@ function drawTrend(trend){
     '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="월별 수입 지출 추이">'+bars+'</svg>'+
     '<div class="axis"><span>'+trend[0].m.slice(2)+'</span><span>'+trend[trend.length-1].m.slice(2)+'</span></div>';
 }
-['#b-fixed','#b-living','#b-goal','#fx-amount','#cd-min','#fs-amount'].forEach(id=>{
+['#b-fixed','#b-living','#b-goal','#fx-amount','#fs-amount'].forEach(id=>{
   $(id).addEventListener('input', formatNumericInput_);
 });
 const digitsOf=id=>Number($(id).value.replace(/[^0-9]/g,'')||0);
@@ -2115,58 +2056,9 @@ $('#fs-add').onclick=async()=>{
   $('#fs-add').disabled=false;
 };
 
-/* ── 관리: 카드 ────────────────────────────────── */
-function renderCards(){
-  const list=$('#cd-list'); list.innerHTML='';
-  if(!S.cards.length){
-    const p=el('div','empty');
-    p.innerHTML='<b>등록된 카드가 없습니다</b>카드별 목적과 혜택, 전월실적 조건을 적어두면 한눈에 볼 수 있습니다.';
-    list.appendChild(p); return;
-  }
-  S.cards.forEach(c=>{
-    const box=el('div','card');
-    box.innerHTML=
-      '<div class="top"><b>'+c.name+'</b>'+
-      (c.purpose?'<span class="purpose">'+c.purpose+'</span>':'')+
-      '<span class="min">전월실적 '+(c.minSpend?comma(c.minSpend)+'원':'—')+'</span></div>'+
-      (c.benefit?'<div class="benefit">'+c.benefit+'</div>':'')+
-      '<div class="meta">'+(c.owner||'')+(c.memo?' · '+c.memo:'')+'</div>';
-    const del=el('button'); del.textContent='✕'; del.setAttribute('aria-label','삭제');
-    del.style.cssText='flex:none;color:var(--faint);padding:4px 2px 4px 8px;font-size:.9375rem';
-    del.onclick=async()=>{
-      if(!confirm("'"+c.name+"' 카드를 삭제할까요?")) return;
-      box.remove();
-      try{ applyExtras(await call('apiDeleteCard',S.pin,c.id)); }
-      catch(e){ toast('삭제하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
-    };
-    box.querySelector('.top').appendChild(del);
-    list.appendChild(box);
-  });
-}
-$('#cd-add').onclick=async()=>{
-  const name=$('#cd-name').value.trim();
-  if(!name){ toast('카드 이름을 입력하세요'); return; }
-  const purpose=$('#cd-purpose').value.trim();
-  const minSpend=digitsOf('#cd-min');
-  const owner=$('#cd-owner').value;
-  const benefit=$('#cd-benefit').value.trim();
-  const memo=$('#cd-memo').value.trim();
-  $('#cd-add').disabled=true;
-  try{
-    const d = await call('apiSaveCard',S.pin,{name:name,purpose:purpose,minSpend:minSpend,owner:owner,benefit:benefit,memo:memo});
-    $('#cd-name').value=''; $('#cd-purpose').value=''; $('#cd-min').value='';
-    $('#cd-benefit').value=''; $('#cd-memo').value='';
-    closeSheet('#cd-form');
-    toast('카드 등록됨'); applyExtras(d);
-  }catch(e){ toast('등록하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
-  $('#cd-add').disabled=false;
-};
 $('#fx-toggle').onclick=()=>openFixedForm(null);
 $('#fx-form-close').onclick=()=>closeSheet('#fx-form');
-$('#cd-toggle').onclick=()=>openSheet('#cd-form');
-$('#cd-form-close').onclick=()=>closeSheet('#cd-form');
 $('#fx-sheet-close').onclick=()=>closeSheet('#fx-sheet');
-$('#card-sheet-close').onclick=()=>closeSheet('#card-sheet');
 $('#goal-sheet-close').onclick=()=>closeSheet('#goal-sheet');
 $('#cat-sheet-close').onclick=()=>closeSheet('#cat-sheet');
 $('#mgmt-menu-open').onclick=()=>openSheet('#mgmt-menu');
@@ -2436,8 +2328,8 @@ function renderAll(){
   buildChips(); buildGoalRow();
   renderStrip(); renderMonth(); renderAssets();
   buildLogFilters(); renderLog(); renderCalendar();
-  buildOwnerSelect($('#fx-owner'), true); buildOwnerSelect($('#cd-owner'), true); buildOwnerSelect($('#entry-owner'), true);
-  renderFixed(); renderCards(); renderCategories(); renderGoals(); renderFixedSavings();
+  buildOwnerSelect($('#fx-owner'), true); buildOwnerSelect($('#entry-owner'), true);
+  renderFixed(); renderCategories(); renderGoals(); renderFixedSavings();
   renderSettle(); renderCompare();
 }
 
