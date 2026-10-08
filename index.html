@@ -234,6 +234,16 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .fx-summary .lbl b{color:var(--ink);font-size:.9375rem;font-weight:800}
 .fx-summary .amt{font-size:1.0625rem;font-weight:800;color:var(--me)}
 .fxrow{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.ownerhead{display:flex;align-items:center;gap:8px;margin:22px 0 2px;padding-bottom:8px;border-bottom:1.5px solid var(--ink)}
+.grandtotal + .ownerhead{margin-top:10px}
+.ownerhead .sw{width:8px;height:8px;border-radius:2px;background:var(--faint);flex:none}
+.ownerhead .sw.me{background:var(--me)}
+.ownerhead .sw.you{background:var(--you)}
+.ownerhead .nm{font-weight:700;font-size:.9375rem}
+.ownerhead .cnt{font-size:.75rem;color:var(--muted)}
+.ownerhead .sum{margin-left:auto;font-weight:800;font-size:.9375rem;font-variant-numeric:tabular-nums}
+.grandtotal{display:flex;align-items:baseline;justify-content:space-between;margin:2px 0 6px;font-size:.8125rem;color:var(--muted)}
+.grandtotal b{color:var(--ink);font-size:1.0625rem;font-weight:800;font-variant-numeric:tabular-nums}
 .fxrow .datebadge{flex:none;width:52px;height:52px;border-radius:50%;background:var(--paper);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
 .fxrow .datebadge b{font-size:.9375rem;font-weight:800;line-height:1;color:var(--ink)}
@@ -2031,6 +2041,34 @@ function compactNum_(n){
 }
 
 /* ── 관리: 고정지출 ────────────────────────────── */
+/** 준식 → 정현 → 공동(그 외) 순서로 묶고, 켜진 항목만 소계에 넣습니다. */
+function groupByOwner_(items){
+  const order=[S.names[0], S.names[1]];
+  const groups=[];
+  const keyOf=it=>order.indexOf(it.owner)>=0 ? it.owner : '공동';
+  [...order, '공동'].forEach(k=>{
+    const list=items.filter(it=>keyOf(it)===k).sort((a,b)=>a.day-b.day);
+    if(!list.length) return;
+    const total=list.filter(it=>it.active).reduce((a,it)=>a+it.amount,0);
+    groups.push({ owner:k, items:list, total, activeCount:list.filter(it=>it.active).length });
+  });
+  return groups;
+}
+function ownerHead_(g){
+  const sw = g.owner===S.names[0]?' me':(g.owner===S.names[1]?' you':'');
+  const d=el('div','ownerhead');
+  d.innerHTML='<span class="sw'+sw+'"></span><span class="nm">'+g.owner+'</span>'+
+    '<span class="cnt">'+g.activeCount+'건'+(g.activeCount<g.items.length?' (꺼짐 '+(g.items.length-g.activeCount)+')':'')+'</span>'+
+    '<span class="sum">월 '+comma(g.total)+'원</span>';
+  return d;
+}
+function grandTotal_(label, items){
+  const total=items.filter(it=>it.active).reduce((a,it)=>a+it.amount,0);
+  const d=el('div','grandtotal');
+  d.innerHTML='<span>'+label+'</span><b>월 '+comma(total)+'원</b>';
+  return d;
+}
+
 function renderFixed(){
   const list=$('#fx-list'); list.innerHTML='';
   const summary=$('#fx-summary');
@@ -2048,8 +2086,10 @@ function renderFixed(){
     ' · 예정 <b>'+pendingItems.length+'건</b></span>'+
     '<span class="amt">'+won(doneSum)+'</span></div>';
 
-  const sorted=S.fixedExpenses.slice().sort((a,b)=>a.day-b.day);
-  sorted.forEach(f=>{
+  list.appendChild(grandTotal_('켜진 고정지출 합계', S.fixedExpenses));
+  groupByOwner_(S.fixedExpenses).forEach(g=>{
+  list.appendChild(ownerHead_(g));
+  g.items.forEach(f=>{
     const done = f.active && f.lastMonth===curMonth;
     const stLabel = !f.active ? '꺼짐' : (done ? '완료' : '예정');
     const row=el('div','fxrow');
@@ -2059,8 +2099,7 @@ function renderFixed(){
     row.appendChild(badge);
 
     const content=el('div','content');
-    content.innerHTML='<div class="t">'+f.item+(f.owner?' <span style="font-weight:400;color:var(--muted);font-size:.8125rem"> · '+f.owner+'</span>':'')+
-      '<span class="chev">›</span></div>'+
+    content.innerHTML='<div class="t">'+f.item+'<span class="chev">›</span></div>'+
       '<div class="amt">'+comma(f.amount)+'원'+(f.memo?' · '+f.memo:'')+'</div>';
     content.onclick=()=>openFixedForm(f);
     row.appendChild(content);
@@ -2085,6 +2124,7 @@ function renderFixed(){
     row.appendChild(actions);
 
     list.appendChild(row);
+  });
   });
 }
 function openFixedForm(f){
@@ -2129,11 +2169,14 @@ function renderFixedSavings(){
     p.innerHTML='<b>등록된 고정저축이 없습니다</b>저축 목표를 먼저 만든 뒤, 매달 얼마씩 자동으로 모을지 등록해보세요.';
     list.appendChild(p); return;
   }
-  S.fixedSavings.forEach(f=>{
+  list.appendChild(grandTotal_('켜진 고정저축 합계', S.fixedSavings));
+  groupByOwner_(S.fixedSavings).forEach(grp=>{
+  list.appendChild(ownerHead_(grp));
+  grp.items.forEach(f=>{
     const goal=S.goals.find(g=>g.id===f.goalId);
     const row=el('div','acct');
     row.innerHTML='<span class="dot'+(f.active?'':' debt')+'"></span>'+
-      '<span class="nm">'+(goal?goal.name:'(삭제된 목표)')+' · 매월 '+f.day+'일'+(f.owner?' · '+f.owner:'')+'</span>';
+      '<span class="nm">'+(goal?goal.name:'(삭제된 목표)')+' · 매월 '+f.day+'일</span>';
     const amt=el('span'); amt.style.cssText='flex:none;font-weight:700;font-size:.9375rem';
     amt.textContent=comma(f.amount);
     const tgl=el('button','x'); tgl.textContent=f.active?'끄기':'켜기';
@@ -2155,6 +2198,7 @@ function renderFixedSavings(){
       memo.textContent=f.memo; row.appendChild(memo);
     }
     list.appendChild(row);
+  });
   });
 }
 $('#fs-toggle').onclick=()=>{
