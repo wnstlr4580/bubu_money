@@ -261,27 +261,10 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   border-radius:50%;background:#fff;transition:transform var(--tap);box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .mini-switch.on::after{transform:translateX(14px)}
 
-.pill{display:inline-block;padding:6px 12px;border-radius:var(--r-pill);background:var(--surface);
-  font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 6px 6px 0;border:1px solid transparent}
-.pill.done{background:var(--me);color:#fff}
-.pill.mine{border-color:var(--ink);transition:transform var(--tap)}
-.pill.mine.done{border-color:var(--me)}
-.pill.mine:active{transform:scale(.96)}
-#settle-banner{margin-top:4px;padding:12px 14px;border-radius:var(--r-lg);background:var(--me);
-  color:#fff;font-weight:700;font-size:.875rem}
 .cmp-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:.8125rem}
 .cmp-row.cmp-head{color:var(--muted);font-weight:600;font-size:.75rem}
 .cmp-cat{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cmp-v{width:64px;flex:none;text-align:right;font-variant-numeric:tabular-nums}
-.tax-card{padding:14px;background:var(--surface);border-radius:var(--r-lg);margin-bottom:10px}
-.tax-card b{font-size:.9375rem}
-.tax-card .sub{margin:6px 0 0}
-.ytable-wrap{overflow-x:auto;margin-top:4px}
-.ytable{border-collapse:collapse;width:100%;min-width:640px;font-size:.75rem}
-.ytable th,.ytable td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
-.ytable th:first-child,.ytable td:first-child{text-align:left;position:sticky;left:0;
-  background:var(--paper);max-width:90px;overflow:hidden;text-overflow:ellipsis}
-.ytable th{color:var(--muted);font-weight:600}
 
 #tabs{flex:none;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);
   background:var(--paper);padding-bottom:var(--pad)}
@@ -403,9 +386,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <button id="m-next" aria-label="다음 달">›</button>
       </div>
       <div class="bars" id="m-bars"></div>
-      <div class="stats" id="m-stats"></div>
-      <h2 style="margin-top:26px">월별 수입·지출 추이</h2>
-      <div class="chart" id="m-trend"></div>
       <div class="editor">
         <h2>저축 계획</h2>
         <div class="field"><label id="p-inc1-lbl">월평균 수입 1</label><input id="p-inc1" inputmode="numeric" placeholder="0"></div>
@@ -418,14 +398,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <div class="field" id="p-rate-row"><label>전체 저축 비율 (%)</label><input id="p-rate" inputmode="numeric" placeholder="0"></div>
         <div id="p-goal-info"></div>
         <div id="p-result"></div>
-      </div>
-      <div class="editor">
-        <h2>이 달 정산</h2>
-        <p class="sub" style="margin:0 0 10px">본인 이름을 탭하면 정산 완료로 표시돼요</p>
-        <div id="settle-status"></div>
-        <div id="settle-banner" hidden></div>
-        <h2 style="margin-top:26px">카테고리별 지출 비교</h2>
-        <div id="settle-compare"></div>
       </div>
     </div>
   </section>
@@ -565,28 +537,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
           <option value="저축">저축</option>
         </select>
       </div>
-      <div class="field"><label for="cg-irregular">비정기 지출</label>
-        <input type="checkbox" id="cg-irregular" style="margin-left:auto;width:20px;height:20px">
-      </div>
       <button class="wide" id="cg-save">저장</button>
-    </div>
-  </div>
-
-  <!-- 연말정산·연간결산 (관리 메뉴에서 열림) -->
-  <div class="sheet" id="year-sheet">
-    <div class="sheet-head"><button id="year-sheet-close" aria-label="닫기">‹</button><h2>연말정산 · 연간결산</h2></div>
-    <div class="sheet-body">
-      <h2>연말정산 카드 계산기</h2>
-      <div class="field"><label id="inc1-lbl">연봉</label><input id="income1" inputmode="numeric" placeholder="0"></div>
-      <div class="field"><label id="inc2-lbl">연봉</label><input id="income2" inputmode="numeric" placeholder="0"></div>
-      <button class="wide ghost" id="income-save">연봉 저장</button>
-      <div id="tax-result" style="margin-top:16px"></div>
-
-      <h2 style="margin-top:26px">비정기 지출 (올해)</h2>
-      <div id="irregular-box"></div>
-
-      <h2 style="margin-top:26px">연간 결산</h2>
-      <div class="ytable-wrap" id="year-table"></div>
     </div>
   </div>
 
@@ -598,7 +549,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
       <button class="wide ghost" data-open="#fx-sheet">고정지출 관리</button>
       <button class="wide ghost" data-open="#goal-sheet" style="margin-top:10px">저축목표</button>
       <button class="wide ghost" data-open="#cat-sheet" style="margin-top:10px">카테고리 관리</button>
-      <button class="wide ghost" data-open="#year-sheet" style="margin-top:10px">연말정산 · 연간결산</button>
     </div>
   </div>
 
@@ -693,7 +643,7 @@ function docToFixed_(doc){
 }
 function docToCategory_(doc){
   const c=doc.data();
-  return { id:doc.id, name:c.name, kind:c.kind, order:Number(c.order)||0, irregular:!!c.irregular };
+  return { id:doc.id, name:c.name, kind:c.kind, order:Number(c.order)||0 };
 }
 function docToGoal_(doc){
   const g=doc.data();
@@ -730,19 +680,7 @@ API.apiLoad = async (pin, month) => {
   const assets = assetSnap.docs.map(docToAsset_);
 
   const cutoff = shiftYm(ymNow(), -13);
-  const [histSnap, assetHistSnap] = await Promise.all([
-    db.collection('tx').where('ym','>=',cutoff).get(),
-    db.collection('assets').where('ym','>=',cutoff).get(),
-  ]);
-  const monthlyMap={};
-  histSnap.docs.forEach(doc=>{
-    const t=doc.data();
-    if(!monthlyMap[t.ym]) monthlyMap[t.ym]={income:0,expense:0};
-    if(t.kind==='수입') monthlyMap[t.ym].income += Number(t.amount)||0;
-    else if(t.kind==='지출') monthlyMap[t.ym].expense += Number(t.amount)||0;
-  });
-  const trend = Object.keys(monthlyMap).sort().slice(-12)
-    .map(m=>({ m, income:monthlyMap[m].income, expense:monthlyMap[m].expense }));
+  const assetHistSnap = await db.collection('assets').where('ym','>=',cutoff).get();
 
   const netByMonth={};
   assetHistSnap.docs.forEach(doc=>{
@@ -753,7 +691,7 @@ API.apiLoad = async (pin, month) => {
 
   const plan = { inc:[Number(cfg.monthlyIncome1)||0, Number(cfg.monthlyIncome2)||0],
     mode: cfg.saveMode==='goal' ? 'goal' : 'rate', rate:Number(cfg.saveRateTotal)||0 };
-  return { ok:true, month, names, plan, tx, recent, assets, series, trend };
+  return { ok:true, month, names, plan, tx, recent, assets, series };
 };
 
 API.apiLoadExtras = async (pin) => {
@@ -934,7 +872,7 @@ API.apiSaveCategory = async (pin, c) => {
   if(['지출','수입','저축'].indexOf(c.kind)<0) throw new Error('구분이 올바르지 않습니다.');
   if(c.id){
     await db.collection('categories').doc(c.id).update({
-      name:String(c.name||'').trim().slice(0,20), kind:c.kind, irregular:!!c.irregular,
+      name:String(c.name||'').trim().slice(0,20), kind:c.kind,
     });
     return Object.assign(await API.apiLoadExtras(pin), { success:true });
   }
@@ -944,7 +882,7 @@ API.apiSaveCategory = async (pin, c) => {
   if(!dupSnap.empty) return Object.assign(await API.apiLoadExtras(pin), { success:false, message:'같은 이름의 카테고리가 이미 있습니다.' });
   const cntSnap = await db.collection('categories').where('kind','==',c.kind).get();
   await db.collection('categories').add({
-    name:String(c.name).trim().slice(0,20), kind:c.kind, order:cntSnap.size+1, irregular:!!c.irregular,
+    name:String(c.name).trim().slice(0,20), kind:c.kind, order:cntSnap.size+1,
   });
   return Object.assign(await API.apiLoadExtras(pin), { success:true });
 };
@@ -993,27 +931,6 @@ API.apiGoalProgress = async (pin) => {
   return { ok:true, progress, thisMonth };
 };
 
-API.apiGetSettlement = async (pin, month) => {
-  const cfg = await checkPin_(pin);
-  const names=[cfg.name1||'나', cfg.name2||'배우자'];
-  const status={}; names.forEach(n=>{ status[n]={done:false, at:''}; });
-  const snap = await db.collection('settlement').where('month','==',month).get();
-  snap.docs.forEach(doc=>{
-    const s=doc.data();
-    if(status.hasOwnProperty(s.who)) status[s.who]={ done:!!s.done, at:s.at||'' };
-  });
-  return { ok:true, names, status };
-};
-
-API.apiConfirmSettlement = async (pin, month, who, done) => {
-  await checkPin_(pin);
-  const at = done ? new Date().toISOString() : '';
-  await db.collection('settlement').doc(month+'_'+who).set({ month, who, done:!!done, at }, { merge:true });
-  const result = await API.apiGetSettlement(pin, month);
-  if(result.status[who]) result.status[who] = { done:!!done, at };
-  return result;
-};
-
 API.apiSavePlan = async (pin, plan) => {
   await checkPin_(pin);
   const doc = {
@@ -1025,51 +942,6 @@ API.apiSavePlan = async (pin, plan) => {
   return { ok:true, plan:{ inc:[doc.monthlyIncome1, doc.monthlyIncome2], mode:doc.saveMode, rate:doc.saveRateTotal } };
 };
 
-API.apiSaveIncome = async (pin, income1, income2) => {
-  await checkPin_(pin);
-  await db.collection('config').doc('main').set({
-    income1:Number(income1)||0, income2:Number(income2)||0,
-  }, { merge:true });
-  return { ok:true };
-};
-
-API.apiYearSummary = async (pin, year) => {
-  const cfg = await checkPin_(pin);
-  const names=[cfg.name1||'나', cfg.name2||'배우자'];
-  const income={}; income[names[0]]=Number(cfg.income1)||0; income[names[1]]=Number(cfg.income2)||0;
-
-  const [catSnap, txSnap] = await Promise.all([
-    db.collection('categories').get(),
-    db.collection('tx').where('ym','>=',year+'-01').where('ym','<=',year+'-12').get(),
-  ]);
-  const catInfo={};
-  catSnap.docs.forEach(doc=>{ const c=doc.data(); catInfo[c.name]={ kind:c.kind, irregular:!!c.irregular }; });
-
-  const spentByPerson={}; names.forEach(n=>{ spentByPerson[n]=0; });
-  const categoryMonthly={};
-  let irregularTotal=0;
-  const irregularByCategory={};
-  txSnap.docs.forEach(doc=>{
-    const t=doc.data();
-    if(t.kind!=='지출') return;
-    const amount=Number(t.amount)||0;
-    const monthIdx=Number(t.ym.slice(5,7))-1;
-    if(spentByPerson.hasOwnProperty(t.who)) spentByPerson[t.who]+=amount;
-    if(!categoryMonthly[t.category]) categoryMonthly[t.category]=new Array(12).fill(0);
-    categoryMonthly[t.category][monthIdx]+=amount;
-    const info=catInfo[t.category];
-    if(info && info.irregular){
-      irregularTotal+=amount;
-      irregularByCategory[t.category]=(irregularByCategory[t.category]||0)+amount;
-    }
-  });
-  const threshold={}; names.forEach(n=>{ threshold[n]=Math.round(income[n]*0.25); });
-
-  return {
-    ok:true, year:Number(year), names, income, spentByPerson, threshold,
-    categoryMonthly, irregularTotal, irregularByCategory,
-  };
-};
 
 const $ = s=>document.querySelector(s);
 const el=(t,c)=>{const n=document.createElement(t); if(c) n.className=c; return n;};
@@ -1116,12 +988,12 @@ document.querySelectorAll('.sheet').forEach(setupSheetSwipe);
 const ASSET_KINDS=['예금','투자','연금','복지포인트','부동산','부채'];
 
 const S={ pin:'', who:'', names:['나','배우자'], plan:{inc:[0,0],mode:'rate',rate:0}, goalProgressThisMonth:{}, month:'',
-          tx:[], recent:[], assets:[], series:[], trend:[],
+          tx:[], recent:[], assets:[], series:[],
           fixedExpenses:[], categories:[], goals:[], goalProgress:{},
           entryKind:'지출', cat:'', digits:'', goal:'',
           logFilter:{kind:'all', who:'all', cat:'all', q:''}, searchResult:null,
           logView:'list', calSelDate:null,
-          settlement:null, yearSummary:null, year:new Date().getFullYear() };
+          };
 
 const store={
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
@@ -1222,19 +1094,13 @@ $('#boot-retry').onclick=()=>start();
  *  (따로 다시 불러오지 않음), 월 이동처럼 "순수 조회"가 필요할 때만 load()/loadExtras()를 씁니다. */
 function applyLoad(d){
   S.month=d.month; S.names=d.names; if(d.plan) S.plan=d.plan; S.tx=d.tx; S.recent=d.recent;
-  S.assets=d.assets; S.series=d.series; S.trend=d.trend||[];
+  S.assets=d.assets; S.series=d.series;
   renderAll();
-  loadSettlement();
 }
 function applyExtras(d){
   S.fixedExpenses=d.fixedExpenses||[]; S.categories=d.categories||[];
   S.goals=d.goals||[];
   renderAll();
-}
-/** 이 달 정산 완료 상태만 따로 불러옵니다 (월이 바뀔 때마다 자동 호출). */
-async function loadSettlement(){
-  try{ S.settlement = await call('apiGetSettlement', S.pin, S.month); renderSettle(); }
-  catch(e){}
 }
 /** 거래·예산·자산처럼 자주 바뀌는 것만 불러옵니다 (월 이동 등 순수 조회용). */
 async function load(){
@@ -1374,23 +1240,7 @@ function renderMonth(){
   $('#b-fixed-val').textContent=comma(fixedBudget)+'원';
   renderPlan(plan);
 
-  const spent={ 고정지출:sumBy(t=>t.category==='고정지출') };
-  const income=sumBy(t=>t.kind==='수입');
-  const expense=sumBy(t=>t.kind==='지출');
-  const saved=sumBy(t=>t.kind==='저축');
-
   const bars=$('#m-bars'); bars.innerHTML='';
-  [
-    ['고정지출', fixedBudget, spent.고정지출],
-  ].forEach(([k,bud,used])=>{
-    const budget=Number(bud)||0;
-    const ratio=budget>0?used/budget:0;
-    const w=el('div','bar'+(ratio>1?' over':''));
-    w.innerHTML='<div class="top"><span>'+k+'</span><em class="num">'+comma(used)+
-      (budget>0?' / '+comma(budget):'')+'</em></div>'+
-      '<div class="track"><div class="fill" style="width:'+(Math.min(ratio,1)*100)+'%"></div></div>';
-    bars.appendChild(w);
-  });
   S.names.forEach((n,i)=>{
     const rate=plan.rates[i];
     if(!rate) return;
@@ -1408,42 +1258,11 @@ function renderMonth(){
     bars.appendChild(w);
   });
 
-  const rate = income>0 ? Math.round((saved+Math.max(income-expense-saved,0))/income*100) : null;
-  $('#m-stats').innerHTML=
-    '<div><span>수입</span><b class="num">'+comma(income)+'</b></div>'+
-    '<div><span>지출</span><b class="num">'+comma(expense)+'</b></div>'+
-    '<div><span>저축률</span><b class="num">'+(rate===null?'—':rate+'%')+'</b></div>';
-
   if(!document.activeElement || !document.activeElement.closest('.editor')){
     $('#p-inc1').value = S.plan.inc[0] ? comma(S.plan.inc[0]) : '';
     $('#p-inc2').value = S.plan.inc[1] ? comma(S.plan.inc[1]) : '';
     $('#p-rate').value = S.plan.rate ? S.plan.rate : '';
   }
-  drawTrend(S.trend);
-}
-function drawTrend(trend){
-  const box=$('#m-trend');
-  if(!trend || trend.length<2){ box.innerHTML='<p class="sub">기록이 두 달 이상 쌓이면 표시됩니다</p>'; return; }
-  const W=300,H=120,P=6, n=trend.length;
-  const max=Math.max.apply(null, trend.map(t=>Math.max(t.income,t.expense)).concat([1]));
-  const gw=(W-2*P)/n;
-  const bw=Math.min(gw*0.34, 14);
-  let bars='';
-  trend.forEach((t,i)=>{
-    const cx=P+gw*i+gw/2;
-    const hi=(t.income/max)*(H-2*P), he=(t.expense/max)*(H-2*P);
-    bars+='<rect x="'+(cx-bw-1).toFixed(1)+'" y="'+(H-P-hi).toFixed(1)+'" width="'+bw.toFixed(1)+
-      '" height="'+hi.toFixed(1)+'" rx="2" fill="#1F6F5C"></rect>';
-    bars+='<rect x="'+(cx+1).toFixed(1)+'" y="'+(H-P-he).toFixed(1)+'" width="'+bw.toFixed(1)+
-      '" height="'+he.toFixed(1)+'" rx="2" fill="#B3392C"></rect>';
-  });
-  box.innerHTML=
-    '<div style="display:flex;gap:14px;font-size:.75rem;color:var(--muted);margin-bottom:6px">'+
-    '<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#1F6F5C;margin-right:4px"></span>수입</span>'+
-    '<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#B3392C;margin-right:4px"></span>지출</span>'+
-    '</div>'+
-    '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="월별 수입 지출 추이">'+bars+'</svg>'+
-    '<div class="axis"><span>'+trend[0].m.slice(2)+'</span><span>'+trend[trend.length-1].m.slice(2)+'</span></div>';
 }
 ['#p-inc1','#p-inc2','#fx-amount'].forEach(id=>{
   $(id).addEventListener('input', formatNumericInput_);
@@ -1526,66 +1345,6 @@ function renderPlan(plan){
   else if(plan.uneven>=0) note.textContent=S.names[plan.uneven]+'님은 고정지출을 빼면 남는 돈이 적어서, 저축은 '+S.names[1-plan.uneven]+'님이 모두 맡는 걸로 계산했어요.';
   else note.textContent='각자 고정지출을 빼고 남는 돈이 같아지도록 저축을 나눴어요. 공동 고정지출은 반씩 나눠 계산합니다. 수입이 들어올 때마다 저축 비율만큼 먼저 떼어두세요.';
   box.appendChild(note);
-}
-
-/* ── 이 달 정산 ────────────────────────────────── */
-function renderSettle(){
-  const box=$('#settle-status'); if(!box) return;
-  const st=S.settlement;
-  if(!st){ box.innerHTML=''; return; }
-  box.innerHTML='';
-  st.names.forEach(n=>{
-    const s=st.status[n]||{done:false};
-    const mine = n===S.who;
-    const pill = el(mine?'button':'span', 'pill'+(s.done?' done':'')+(mine?' mine':''));
-    pill.textContent = n+' '+(s.done?'완료':'대기');
-    if(mine) pill.onclick=()=>toggleSettle(!s.done);
-    box.appendChild(pill);
-  });
-  const bothDone = st.names.length>0 && st.names.every(n=>st.status[n] && st.status[n].done);
-  const banner=$('#settle-banner');
-  banner.hidden=!bothDone;
-  banner.textContent='이번 달 정산이 모두 완료됐어요';
-}
-async function toggleSettle(newDone){
-  const prev = S.settlement;
-  if(S.settlement && S.settlement.status[S.who]){
-    S.settlement = JSON.parse(JSON.stringify(S.settlement));
-    S.settlement.status[S.who].done = newDone;
-    renderSettle();
-  }
-  try{
-    S.settlement = await call('apiConfirmSettlement', S.pin, S.month, S.who, newDone);
-    renderSettle();
-    toast(newDone?'정산 완료로 표시했습니다':'정산 완료를 취소했습니다');
-  }catch(e){
-    S.settlement = prev; renderSettle();
-    toast('처리하지 못했습니다'+(e&&e.message?(' — '+e.message):''));
-  }
-}
-function renderCompare(){
-  const box=$('#settle-compare'); if(!box) return;
-  const byCat={};
-  S.tx.forEach(t=>{
-    if(!byCat[t.category]) byCat[t.category]={};
-    const w = (t.who===S.names[0]||t.who===S.names[1]) ? t.who : '공동';
-    byCat[t.category][w]=(byCat[t.category][w]||0)+t.amount;
-  });
-  const cats=Object.keys(byCat).sort((a,b)=>{
-    const ta=Object.values(byCat[a]).reduce((x,y)=>x+y,0);
-    const tb=Object.values(byCat[b]).reduce((x,y)=>x+y,0);
-    return tb-ta;
-  });
-  if(!cats.length){ box.innerHTML='<p class="sub">이 달 기록이 없습니다</p>'; return; }
-  let html='<div class="cmp-row cmp-head"><span class="cmp-cat"></span>'+
-    '<span class="cmp-v">'+S.names[0]+'</span><span class="cmp-v">'+S.names[1]+'</span><span class="cmp-v">공동</span></div>';
-  cats.forEach(cat=>{
-    const v1=byCat[cat][S.names[0]]||0, v2=byCat[cat][S.names[1]]||0, v3=byCat[cat]['공동']||0;
-    html+='<div class="cmp-row"><span class="cmp-cat">'+cat+'</span>'+
-      '<span class="cmp-v">'+comma(v1)+'</span><span class="cmp-v">'+comma(v2)+'</span>'+
-      '<span class="cmp-v">'+comma(v3)+'</span></div>';
-  });
-  box.innerHTML=html;
 }
 
 /* ── 자산 ──────────────────────────────────────── */
@@ -2040,11 +1799,9 @@ document.querySelectorAll('#mgmt-menu [data-open]').forEach(btn=>{
     requestAnimationFrame(()=>{ menu.style.transition=''; });
     const target=btn.dataset.open;
     openSheet(target);
-    if(target==='#year-sheet') loadYearSummary();
     if(target==='#goal-sheet') loadGoalProgress();
   };
 });
-$('#year-sheet-close').onclick=()=>closeSheet('#year-sheet');
 
 /* ── 관리: 카테고리 ────────────────────────────── */
 function renderCategories(){
@@ -2062,12 +1819,10 @@ function renderCategories(){
     items.forEach(c=>{
       const row=el('div','acct');
       row.innerHTML='<span class="who"></span><div class="main"><div class="t">'+c.name+
-        (c.irregular?' <span style="color:var(--muted);font-weight:400;font-size:.75rem">· 비정기</span>':'')+
         '</div></div>';
       const edit=el('button','x'); edit.textContent='✎'; edit.setAttribute('aria-label','수정');
       edit.onclick=()=>{
         $('#cg-id').value=c.id; $('#cg-name').value=c.name; $('#cg-kind').value=c.kind;
-        $('#cg-irregular').checked=!!c.irregular;
         openSheet('#cg-form');
       };
       const del=el('button','x'); del.textContent='✕';
@@ -2082,7 +1837,7 @@ function renderCategories(){
   });
 }
 $('#cg-toggle').onclick=()=>{
-  $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출'; $('#cg-irregular').checked=false;
+  $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출';
   openSheet('#cg-form');
 };
 $('#cg-form-close').onclick=()=>closeSheet('#cg-form');
@@ -2090,12 +1845,11 @@ $('#cg-save').onclick=async()=>{
   const id=$('#cg-id').value;
   const name=$('#cg-name').value.trim();
   const kind=$('#cg-kind').value;
-  const irregular=$('#cg-irregular').checked;
   if(!name){ toast('이름을 입력하세요'); return; }
   $('#cg-save').disabled=true;
   try{
-    const d = await call('apiSaveCategory',S.pin,{id:id||undefined, name:name, kind:kind, irregular:irregular});
-    $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출'; $('#cg-irregular').checked=false;
+    const d = await call('apiSaveCategory',S.pin,{id:id||undefined, name:name, kind:kind});
+    $('#cg-id').value=''; $('#cg-name').value=''; $('#cg-kind').value='지출';
     closeSheet('#cg-form');
     toast('저장됨'); applyExtras(d);
   }catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
@@ -2240,74 +1994,6 @@ $('#gl-save').onclick=async()=>{
   $('#gl-save').disabled=false;
 };
 
-/* ── 관리: 연간(연말정산·비정기·연간결산) ─────────── */
-async function loadYearSummary(){
-  try{ S.yearSummary = await call('apiYearSummary', S.pin, S.year); renderYear(); }
-  catch(e){ toast('연간 데이터를 불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
-}
-function renderYear(){
-  const d=S.yearSummary; if(!d) return;
-  $('#inc1-lbl').textContent=S.names[0]+' 연봉';
-  $('#inc2-lbl').textContent=S.names[1]+' 연봉';
-  if(document.activeElement!==$('#income1')){
-    const v1=d.income[S.names[0]]; $('#income1').value = v1?comma(v1):'';
-  }
-  if(document.activeElement!==$('#income2')){
-    const v2=d.income[S.names[1]]; $('#income2').value = v2?comma(v2):'';
-  }
-
-  $('#tax-result').innerHTML = S.names.map(n=>{
-    const income=d.income[n]||0, spent=d.spentByPerson[n]||0, threshold=d.threshold[n]||0;
-    if(!income){
-      return '<div class="tax-card"><b>'+n+'</b><p class="sub">연봉을 입력하고 저장하면 계산됩니다</p></div>';
-    }
-    const remain=threshold-spent;
-    const body = remain>0
-      ? '<p class="sub">공제 문턱(연봉의 25%) <b class="num">'+comma(threshold)+'원</b> · 앞으로 <b class="num" style="color:var(--over)">'+comma(remain)+'원</b> 더 써야 공제가 시작돼요. 그때까진 혜택 좋은 신용카드가 유리해요.</p>'
-      : '<p class="sub">공제 문턱(연봉의 25%) <b class="num">'+comma(threshold)+'원</b>을 <b class="num" style="color:var(--me)">'+comma(-remain)+'원</b> 넘겼어요. 지금부터는 체크카드·현금영수증(30% 공제)이 더 유리해요.</p>';
-    return '<div class="tax-card"><b>'+n+'</b><p class="sub">올해 지출 <span class="num">'+comma(spent)+'원</span></p>'+body+'</div>';
-  }).join('');
-
-  const irr=$('#irregular-box');
-  const items=Object.entries(d.irregularByCategory||{});
-  if(!items.length){
-    irr.innerHTML='<p class="sub">비정기로 표시된 카테고리의 지출이 아직 없습니다. 카테고리 관리에서 "비정기 지출"에 체크해보세요.</p>';
-  } else {
-    irr.innerHTML='<p class="big num" style="margin-bottom:10px">'+comma(d.irregularTotal)+'원</p>'+
-      items.map(([cat,v])=>'<div class="cmp-row"><span class="cmp-cat">'+cat+'</span><span class="cmp-v">'+comma(v)+'원</span></div>').join('');
-  }
-
-  const cats=Object.keys(d.categoryMonthly||{});
-  const table=$('#year-table');
-  if(!cats.length){
-    table.innerHTML='<p class="sub">'+d.year+'년 지출 기록이 없습니다</p>';
-  } else {
-    let html='<table class="ytable"><thead><tr><th></th>'+
-      Array.from({length:12},(_,i)=>'<th>'+(i+1)+'월</th>').join('')+'<th>합계</th></tr></thead><tbody>';
-    cats.forEach(cat=>{
-      const vals=d.categoryMonthly[cat];
-      const total=vals.reduce((a,b)=>a+b,0);
-      html+='<tr><td>'+cat+'</td>'+vals.map(v=>'<td>'+(v?comma(v):'—')+'</td>').join('')+'<td><b>'+comma(total)+'</b></td></tr>';
-    });
-    html+='</tbody></table>';
-    table.innerHTML=html;
-  }
-}
-['#income1','#income2'].forEach(id=>{
-  $(id).addEventListener('input', formatNumericInput_);
-});
-$('#income-save').onclick=async()=>{
-  const i1=Number($('#income1').value.replace(/[^0-9]/g,'')||0);
-  const i2=Number($('#income2').value.replace(/[^0-9]/g,'')||0);
-  $('#income-save').disabled=true;
-  try{
-    await call('apiSaveIncome', S.pin, i1, i2);
-    toast('연봉 저장됨');
-    if(document.activeElement) document.activeElement.blur();
-    await loadYearSummary();
-  }catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
-  $('#income-save').disabled=false;
-};
 
 /* ── 공통 ──────────────────────────────────────── */
 function renderAll(){
@@ -2316,7 +2002,6 @@ function renderAll(){
   buildLogFilters(); renderLog(); renderCalendar();
   buildOwnerSelect($('#fx-owner'), true); buildOwnerSelect($('#entry-owner'), true);
   renderFixed(); renderCategories(); renderGoals();
-  renderSettle(); renderCompare();
 }
 
 document.querySelectorAll('#tabs button').forEach(btn=>{
