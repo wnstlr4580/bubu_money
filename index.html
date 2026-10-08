@@ -42,12 +42,9 @@ button{cursor:pointer}
 .screen{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none}
 .screen.on{display:flex;flex-direction:column}
 
-#strip{flex:none;display:flex;align-items:baseline;gap:.5rem;
-  padding:calc(env(safe-area-inset-top,0px) + 12px) 20px 11px;border-bottom:1px solid var(--line)}
-#strip .lbl{font-size:.8125rem;color:var(--muted);font-weight:500}
-#strip .val{margin-left:auto;font-size:1.0625rem;font-weight:700}
-#strip .val.over{color:var(--over)}
-#strip .me{font-size:.75rem;color:var(--faint);font-weight:600}
+#strip{flex:none;display:flex;align-items:center;gap:.5rem;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 20px 9px;border-bottom:1px solid var(--line)}
+#strip .lbl{font-size:.9375rem;font-weight:700}
 
 #entry{padding:0 16px}
 .amount{flex:none;display:flex;align-items:center;justify-content:center;min-height:124px;padding:8px 4px 4px}
@@ -370,9 +367,8 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 
 <div id="app" hidden>
   <div id="strip">
-    <span class="lbl">이 달 남은 저축</span>
-    <span class="val num" id="strip-val">—</span>
-    <button class="gear" id="mgmt-menu-open" aria-label="관리" style="align-self:center;margin-left:8px">⚙</button>
+    <span class="lbl">우리집 가계</span>
+    <button class="gear" id="mgmt-menu-open" aria-label="관리" style="margin-left:auto">⚙</button>
   </div>
 
   <section class="screen on" id="entry">
@@ -2314,17 +2310,9 @@ $('#income-save').onclick=async()=>{
 };
 
 /* ── 공통 ──────────────────────────────────────── */
-function renderStrip(){
-  const plan=computePlan_();
-  const v=$('#strip-val');
-  v.classList.remove('over');
-  if(!plan.ready || !plan.total){ v.textContent='—'; return; }
-  const left=plan.total - sumBy(t=>t.kind==='저축');
-  v.textContent = left>0 ? won(left) : '달성';
-}
 function renderAll(){
   buildChips(); buildGoalRow();
-  renderStrip(); renderMonth(); renderAssets();
+  renderMonth(); renderAssets();
   buildLogFilters(); renderLog(); renderCalendar();
   buildOwnerSelect($('#fx-owner'), true); buildOwnerSelect($('#entry-owner'), true);
   renderFixed(); renderCategories(); renderGoals();
