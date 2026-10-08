@@ -135,6 +135,26 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .bar.over .fill{background:var(--over)}
 .bar.over .top em{color:var(--over)}
 .bar.save .fill{background:#2E5B7A}
+.linkrow{width:100%;text-align:left}
+.linkrow .num{margin-left:auto;font-weight:600}
+.linkrow .chev{color:var(--faint);margin-left:8px}
+#p-mode{grid-template-columns:repeat(2,1fr)}
+#p-rate-row[hidden]{display:none}
+.plan-sum{margin:14px 0 6px;font-size:.9375rem}
+.plan-sum b{font-size:1.0625rem}
+.plan-table .cmp-v{width:92px}
+.plan-table .cmp-row.hl{font-weight:700}
+.plan-note{margin:8px 0 0;font-size:.8125rem;color:var(--muted)}
+.plan-note.warn{color:var(--over)}
+#notice{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;
+  width:min(86vw,340px);background:var(--surface);border-radius:var(--r-lg);padding:22px 20px 16px}
+#notice[hidden]{display:none}
+#notice-title{margin:0 0 6px;font-weight:700;font-size:1rem}
+#notice-body{margin:0 0 18px;color:var(--muted);font-size:.9375rem;line-height:1.5}
+#notice-body b{color:var(--ink)}
+.notice-actions{display:flex;gap:8px}
+.notice-actions button{flex:1;padding:12px;border-radius:var(--r-sm);font-weight:700;font-size:.875rem;background:var(--paper)}
+.notice-actions #notice-go{background:var(--ink);color:#fff}
 .bar .cap{margin:5px 0 0;font-size:.75rem;color:var(--muted)}
 
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);
@@ -384,12 +404,21 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
       <div class="chart" id="m-trend"></div>
       <div class="editor">
         <h2>이 달 예산</h2>
-        <div class="field"><label>고정지출</label><input id="b-fixed" inputmode="numeric" placeholder="0"></div>
+        <button class="field linkrow" id="b-fixed-row" type="button"><label>고정지출</label><span class="num" id="b-fixed-val">0</span><span class="chev">›</span></button>
         <div class="field"><label>생활비</label><input id="b-living" inputmode="numeric" placeholder="0"></div>
-        <div class="field"><label>저축 목표</label><input id="b-goal" inputmode="numeric" placeholder="0"></div>
-        <div class="field"><label id="r-rate1-lbl">저축 비율 1 (%)</label><input id="r-rate1" inputmode="numeric" placeholder="0"></div>
-        <div class="field"><label id="r-rate2-lbl">저축 비율 2 (%)</label><input id="r-rate2" inputmode="numeric" placeholder="0"></div>
-        <p class="sub" style="margin:8px 0 0">수입이 들어올 때마다 이 비율만큼 먼저 저축하고 나머지는 자유롭게 써요. 비율은 한 번 정하면 모든 달에 적용됩니다.</p>
+        <p class="sub" style="margin:8px 0 0">고정지출은 고정지출 관리에 등록한 항목을 자동으로 합산해요.</p>
+      </div>
+      <div class="editor">
+        <h2>저축 계획</h2>
+        <div class="field"><label id="p-inc1-lbl">월평균 수입 1</label><input id="p-inc1" inputmode="numeric" placeholder="0"></div>
+        <div class="field"><label id="p-inc2-lbl">월평균 수입 2</label><input id="p-inc2" inputmode="numeric" placeholder="0"></div>
+        <div class="kindsel" id="p-mode" style="margin:14px 0 4px">
+          <button data-mode="rate" aria-pressed="true">수입의 일정 비율</button>
+          <button data-mode="goal" aria-pressed="false">저축목표 기준</button>
+        </div>
+        <div class="field" id="p-rate-row"><label>전체 저축 비율 (%)</label><input id="p-rate" inputmode="numeric" placeholder="0"></div>
+        <div id="p-goal-info"></div>
+        <div id="p-result"></div>
       </div>
       <div class="editor">
         <h2>이 달 정산</h2>
@@ -603,6 +632,12 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
   </nav>
 </div>
 
+<div class="backdrop" id="notice-backdrop" style="z-index:69"></div>
+<div id="notice" role="dialog" aria-modal="true" aria-labelledby="notice-title" hidden>
+  <p id="notice-title"></p>
+  <p id="notice-body"></p>
+  <div class="notice-actions"><button id="notice-later" type="button">나중에</button><button id="notice-go" type="button">저축 바로 입력</button></div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -749,8 +784,9 @@ API.apiLoad = async (pin, month) => {
   });
   const series = Object.keys(netByMonth).sort().slice(-12).map(m=>({ m, v:netByMonth[m] }));
 
-  const rates = [Number(cfg.saveRate1)||0, Number(cfg.saveRate2)||0];
-  return { ok:true, month, names, rates, tx, recent, budget, assets, series, trend };
+  const plan = { inc:[Number(cfg.monthlyIncome1)||0, Number(cfg.monthlyIncome2)||0],
+    mode: cfg.saveMode==='goal' ? 'goal' : 'rate', rate:Number(cfg.saveRateTotal)||0 };
+  return { ok:true, month, names, plan, tx, recent, budget, assets, series, trend };
 };
 
 API.apiLoadExtras = async (pin) => {
@@ -1039,17 +1075,20 @@ API.apiGoalProgress = async (pin) => {
     db.collection('tx').where('kind','==','저축').get(),
     db.collection('fixedSavings').get(),
   ]);
-  const progress = {};
+  const progress = {}, thisMonth = {};
+  const curYm = ymNow();
   txSnap.docs.forEach(doc=>{
     const t=doc.data();
-    if(t.goalId) progress[t.goalId] = (progress[t.goalId]||0) + (Number(t.amount)||0);
+    if(!t.goalId) return;
+    progress[t.goalId] = (progress[t.goalId]||0) + (Number(t.amount)||0);
+    if(t.ym===curYm) thisMonth[t.goalId] = (thisMonth[t.goalId]||0) + (Number(t.amount)||0);
   });
   const rate = {};
   fsSnap.docs.forEach(doc=>{
     const f=doc.data();
     if(f.active!==false && f.goalId) rate[f.goalId] = (rate[f.goalId]||0) + (Number(f.amount)||0);
   });
-  return { ok:true, progress, rate };
+  return { ok:true, progress, thisMonth, rate };
 };
 
 API.apiGetSettlement = async (pin, month) => {
@@ -1073,11 +1112,15 @@ API.apiConfirmSettlement = async (pin, month, who, done) => {
   return result;
 };
 
-API.apiSaveRates = async (pin, rate1, rate2) => {
+API.apiSavePlan = async (pin, plan) => {
   await checkPin_(pin);
-  const clamp=v=>Math.max(0, Math.min(100, Number(v)||0));
-  await db.collection('config').doc('main').set({ saveRate1:clamp(rate1), saveRate2:clamp(rate2) }, { merge:true });
-  return { ok:true, rates:[clamp(rate1), clamp(rate2)] };
+  const doc = {
+    monthlyIncome1:Math.max(0, Number(plan.inc[0])||0), monthlyIncome2:Math.max(0, Number(plan.inc[1])||0),
+    saveMode: plan.mode==='goal' ? 'goal' : 'rate',
+    saveRateTotal:Math.max(0, Math.min(100, Number(plan.rate)||0)),
+  };
+  await db.collection('config').doc('main').set(doc, { merge:true });
+  return { ok:true, plan:{ inc:[doc.monthlyIncome1, doc.monthlyIncome2], mode:doc.saveMode, rate:doc.saveRateTotal } };
 };
 
 API.apiSaveIncome = async (pin, income1, income2) => {
@@ -1170,7 +1213,7 @@ document.querySelectorAll('.sheet').forEach(setupSheetSwipe);
 
 const ASSET_KINDS=['예금','투자','연금','복지포인트','부동산','부채'];
 
-const S={ pin:'', who:'', names:['나','배우자'], rates:[0,0], month:'',
+const S={ pin:'', who:'', names:['나','배우자'], plan:{inc:[0,0],mode:'rate',rate:0}, goalProgressThisMonth:{}, month:'',
           tx:[], recent:[], budget:null, assets:[], series:[], trend:[],
           fixedExpenses:[], categories:[], goals:[], goalProgress:{}, goalRate:{}, fixedSavings:[],
           entryKind:'지출', cat:'', digits:'', goal:'',
@@ -1259,6 +1302,7 @@ async function start(){
     const [ok1, ok2] = await Promise.all([load(), loadExtras()]);
     if(!ok1 || !ok2) throw new Error('데이터를 불러오지 못했습니다.');
     $('#boot-loading').hidden=true;
+    loadGoalProgress();
     try{
       const r = await call('apiRunFixedNow', S.pin, S.month);
       if(r.count>0){ applyLoad(r); applyExtras(r); }
@@ -1275,7 +1319,7 @@ $('#boot-retry').onclick=()=>start();
 /** 저장 API들이 이제 최신 데이터를 같이 돌려주므로, 저장 직후엔 이 함수로 바로 반영하고
  *  (따로 다시 불러오지 않음), 월 이동처럼 "순수 조회"가 필요할 때만 load()/loadExtras()를 씁니다. */
 function applyLoad(d){
-  S.month=d.month; S.names=d.names; S.rates=d.rates||[0,0]; S.tx=d.tx; S.recent=d.recent;
+  S.month=d.month; S.names=d.names; if(d.plan) S.plan=d.plan; S.tx=d.tx; S.recent=d.recent;
   S.budget=d.budget; S.assets=d.assets; S.series=d.series; S.trend=d.trend||[];
   renderAll();
   loadSettlement();
@@ -1379,32 +1423,55 @@ $('#save').onclick=async()=>{
   const prevDigits=S.digits, prevNote=$('#note').value;
   $('#save').disabled=true;
   S.digits=''; $('#note').value=''; $('#entry-owner').value=S.who; paintAmount();
-  const ownerIdx=S.names.indexOf(owner);
-  const ownerRate=ownerIdx>=0 ? (Number(S.rates[ownerIdx])||0) : 0;
-  toast(kind==='수입' && ownerRate
-    ? cat+' '+won(amount)+' 기록됨 · '+won(Math.round(amount*ownerRate/100))+'('+ownerRate+'%) 먼저 저축하세요'
-    : cat+' '+won(amount)+' 기록됨');
+  toast(cat+' '+won(amount)+' 기록됨');
   try{
     const d = await call('apiAddTx', S.pin, {amount:amount, kind:kind, category:cat,
       who:owner, note:note, date:date, goalId:goalId});
     $('#entry-date').value=todayStr();
     applyLoad(d);
+    if(kind==='수입') showSaveNotice_(owner, amount);
   }catch(e){
     S.digits=prevDigits; $('#note').value=prevNote; $('#entry-owner').value=owner; paintAmount();
     toast('저장하지 못했습니다. 다시 시도하세요.'+(e&&e.message?(' — '+e.message):''));
   }
 };
 
+function showSaveNotice_(owner, amount){
+  const i=S.names.indexOf(owner);
+  if(i<0) return;
+  const rate=computePlan_().rates[i];
+  if(!rate) return;
+  const toSave=Math.round(amount*rate/100);
+  if(toSave<=0) return;
+  $('#notice-title').textContent='먼저 저축하세요';
+  $('#notice-body').innerHTML=owner+'님 수입 '+comma(amount)+'원 중 <b class="num">'+comma(toSave)+'원</b>('+rate+'%)을 먼저 저축하고, 나머지는 자유롭게 쓰면 돼요.';
+  $('#notice-go').onclick=()=>{
+    closeNotice_();
+    const btn=document.querySelector('#kindsel button[data-kind="저축"]'); if(btn) btn.click();
+    S.digits=String(toSave); paintAmount();
+    $('#entry-owner').value=owner;
+  };
+  $('#notice').hidden=false; $('#notice-backdrop').classList.add('open');
+  $('#notice-go').focus();
+}
+function closeNotice_(){ $('#notice').hidden=true; $('#notice-backdrop').classList.remove('open'); }
+$('#notice-later').onclick=closeNotice_;
+$('#notice-backdrop').onclick=closeNotice_;
+
 /* ── 이 달 ─────────────────────────────────────── */
 $('#m-prev').onclick=()=>{ S.month=shiftYm(S.month,-1); load(); };
 $('#m-next').onclick=()=>{ S.month=shiftYm(S.month, 1); load(); };
 
 function renderMonth(){
-  const b=S.budget||{fixed:0,living:0,allowance1:0,allowance2:0,goal:0};
+  const b=S.budget||{fixed:0,living:0,goal:0};
+  const fixedBudget=fixedTotal_();
+  const plan=computePlan_();
   $('#m-title').textContent=S.month.slice(0,4)+'년 '+(+S.month.slice(5,7))+'월';
   $('#m-next').disabled = S.month>=ymNow();
-  $('#r-rate1-lbl').textContent=S.names[0]+' 저축 비율 (%)';
-  $('#r-rate2-lbl').textContent=S.names[1]+' 저축 비율 (%)';
+  $('#p-inc1-lbl').textContent=S.names[0]+' 월평균 수입';
+  $('#p-inc2-lbl').textContent=S.names[1]+' 월평균 수입';
+  $('#b-fixed-val').textContent=comma(fixedBudget)+'원';
+  renderPlan(plan);
 
   const spent={
     고정지출:sumBy(t=>t.category==='고정지출'),
@@ -1426,7 +1493,7 @@ function renderMonth(){
 
   const bars=$('#m-bars'); bars.innerHTML='';
   [
-    ['고정지출', b.fixed, spent.고정지출],
+    ['고정지출', fixedBudget, spent.고정지출],
     ['생활비', b.living, spent.생활비],
   ].forEach(([k,bud,used])=>{
     const budget=Number(bud)||0;
@@ -1438,7 +1505,7 @@ function renderMonth(){
     bars.appendChild(w);
   });
   S.names.forEach((n,i)=>{
-    const rate=Number(S.rates[i])||0;
+    const rate=plan.rates[i];
     if(!rate) return;
     const inc=sumBy(t=>t.kind==='수입'&&t.who===n);
     const target=Math.round(inc*rate/100);
@@ -1461,11 +1528,10 @@ function renderMonth(){
     '<div><span>저축률</span><b class="num">'+(rate===null?'—':rate+'%')+'</b></div>';
 
   if(!document.activeElement || !document.activeElement.closest('.editor')){
-    $('#b-fixed').value  = b.fixed      ? comma(b.fixed)      : '';
-    $('#b-living').value = b.living     ? comma(b.living)     : '';
-    $('#r-rate1').value = S.rates[0] ? S.rates[0] : '';
-    $('#r-rate2').value = S.rates[1] ? S.rates[1] : '';
-    $('#b-goal').value   = b.goal       ? comma(b.goal)       : '';
+    $('#b-living').value = b.living ? comma(b.living) : '';
+    $('#p-inc1').value = S.plan.inc[0] ? comma(S.plan.inc[0]) : '';
+    $('#p-inc2').value = S.plan.inc[1] ? comma(S.plan.inc[1]) : '';
+    $('#p-rate').value = S.plan.rate ? S.plan.rate : '';
   }
   drawTrend(S.trend);
 }
@@ -1493,36 +1559,97 @@ function drawTrend(trend){
     '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="월별 수입 지출 추이">'+bars+'</svg>'+
     '<div class="axis"><span>'+trend[0].m.slice(2)+'</span><span>'+trend[trend.length-1].m.slice(2)+'</span></div>';
 }
-['#b-fixed','#b-living','#b-goal','#fx-amount','#fs-amount'].forEach(id=>{
+['#b-living','#p-inc1','#p-inc2','#fx-amount','#fs-amount'].forEach(id=>{
   $(id).addEventListener('input', formatNumericInput_);
 });
 const digitsOf=id=>Number($(id).value.replace(/[^0-9]/g,'')||0);
 async function saveBudgetField_(){
-  const vals={ fixed:digitsOf('#b-fixed'), living:digitsOf('#b-living'),
-    goal:digitsOf('#b-goal') };
   const cur=S.budget||{};
-  const changed=['fixed','living','goal'].some(k=>(Number(cur[k])||0)!==vals[k]);
+  const vals={ fixed:Number(cur.fixed)||0, living:digitsOf('#b-living'), goal:Number(cur.goal)||0 };
+  const changed=(Number(cur.living)||0)!==vals.living;
   if(!changed) return;
   try{ applyLoad(await call('apiSaveBudget', S.pin, S.month, vals)); }
   catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
 }
-['#b-fixed','#b-living','#b-goal'].forEach(id=>{
-  $(id).addEventListener('blur', saveBudgetField_);
-});
-['#r-rate1','#r-rate2'].forEach(id=>{
-  $(id).addEventListener('input', e=>{
-    const v=e.target.value.replace(/[^0-9]/g,'').slice(0,3);
-    e.target.value = v==='' ? '' : String(Math.min(100, Number(v)));
+$('#b-living').addEventListener('blur', saveBudgetField_);
+$('#b-fixed-row').onclick=()=>openSheet('#fx-sheet');
+/* ── 저축 계획 ───────────────────────────────────── */
+async function savePlan_(next){
+  const prev=S.plan;
+  S.plan=next; renderMonth();
+  try{ S.plan=(await call('apiSavePlan', S.pin, next)).plan; renderMonth(); }
+  catch(e){ S.plan=prev; renderMonth(); toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
+}
+['#p-inc1','#p-inc2'].forEach((id,i)=>{
+  $(id).addEventListener('blur', ()=>{
+    const v=digitsOf(id);
+    if(v===(Number(S.plan.inc[i])||0)) return;
+    const inc=S.plan.inc.slice(); inc[i]=v;
+    savePlan_(Object.assign({}, S.plan, {inc}));
   });
-  $(id).addEventListener('blur', async()=>{
-    const r1=digitsOf('#r-rate1'), r2=digitsOf('#r-rate2');
-    if(r1===(Number(S.rates[0])||0) && r2===(Number(S.rates[1])||0)) return;
-    try{
-      const r=await call('apiSaveRates', S.pin, r1, r2);
-      S.rates=r.rates; renderMonth();
-    }catch(e){ toast('저장하지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
-  });
 });
+$('#p-rate').addEventListener('input', e=>{
+  const v=e.target.value.replace(/[^0-9]/g,'').slice(0,3);
+  e.target.value = v==='' ? '' : String(Math.min(100, Number(v)));
+});
+$('#p-rate').addEventListener('blur', ()=>{
+  const v=digitsOf('#p-rate');
+  if(v===(Number(S.plan.rate)||0)) return;
+  savePlan_(Object.assign({}, S.plan, {rate:v}));
+});
+document.querySelectorAll('#p-mode button').forEach(btn=>{
+  btn.onclick=()=>{
+    if(btn.dataset.mode===S.plan.mode) return;
+    savePlan_(Object.assign({}, S.plan, {mode:btn.dataset.mode}));
+  };
+});
+function renderPlan(plan){
+  document.querySelectorAll('#p-mode button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.mode===S.plan.mode));
+  $('#p-rate-row').hidden = S.plan.mode!=='rate';
+
+  const info=$('#p-goal-info'); info.innerHTML='';
+  if(S.plan.mode==='goal'){
+    const p=el('p','plan-note');
+    p.textContent = plan.goalCount
+      ? '목표금액과 목표 날짜가 있는 저축목표 '+plan.goalCount+'개를 기한 안에 채우는 금액이에요.'
+      : '목표금액과 목표 날짜를 정한 저축목표가 아직 없어요.';
+    info.appendChild(p);
+    const go=el('button','wide ghost'); go.type='button'; go.style.marginTop='10px';
+    go.textContent=plan.goalCount?'저축목표 보기':'저축목표 만들기';
+    go.onclick=()=>{ openSheet('#goal-sheet'); loadGoalProgress(); };
+    info.appendChild(go);
+  }
+
+  const box=$('#p-result'); box.innerHTML='';
+  if(!plan.ready){
+    const p=el('p','plan-note'); p.textContent='두 분의 월평균 수입(실수령)을 넣으면 각자 얼마를 저축하면 되는지 계산해 드려요.';
+    box.appendChild(p); return;
+  }
+  const sum=el('p','plan-sum');
+  sum.innerHTML='매달 함께 저축할 금액 <b class="num">'+comma(plan.total)+'원</b>';
+  box.appendChild(sum);
+  const rows=[
+    ['월수입', plan.inc],
+    ['고정지출', plan.fixed],
+    ['저축', plan.save],
+    ['저축 비율', plan.rates.map(r=>r+'%')],
+    ['남는 돈', plan.left],
+  ];
+  let html='<div class="cmp-row cmp-head"><span class="cmp-cat"></span><span class="cmp-v">'+S.names[0]+
+    '</span><span class="cmp-v">'+S.names[1]+'</span></div>';
+  rows.forEach(([k,v])=>{
+    const fmt=x=>typeof x==='number'?comma(x):x;
+    html+='<div class="cmp-row'+(k==='저축 비율'?' hl':'')+'"><span class="cmp-cat">'+k+'</span>'+
+      '<span class="cmp-v">'+fmt(v[0])+'</span><span class="cmp-v">'+fmt(v[1])+'</span></div>';
+  });
+  const t=el('div','plan-table'); t.innerHTML=html; box.appendChild(t);
+
+  const note=el('p','plan-note'+(plan.short||plan.uneven>=0?' warn':''));
+  if(plan.short) note.textContent='수입으로 고정지출과 저축을 다 감당하기 어려워요. 저축 비율이나 목표를 낮춰보세요.';
+  else if(plan.uneven>=0) note.textContent=S.names[plan.uneven]+'님은 고정지출을 빼면 남는 돈이 적어서, 저축은 '+S.names[1-plan.uneven]+'님이 모두 맡는 걸로 계산했어요.';
+  else note.textContent='각자 고정지출을 빼고 남는 돈이 같아지도록 저축을 나눴어요. 공동 고정지출은 반씩 나눠 계산합니다. 수입이 들어올 때마다 저축 비율만큼 먼저 떼어두세요.';
+  box.appendChild(note);
+}
 
 /* ── 이 달 정산 ────────────────────────────────── */
 function renderSettle(){
@@ -2211,11 +2338,47 @@ function renderGoals(){
 }
 /** 달성금액 = 직접 입력해 둔 금액(base) + 이 목표로 기록한 저축 합계 */
 function goalAchieved_(g){ return (Number(g.base)||0) + (S.goalProgress[g.id]||0); }
+/** 고정지출 관리에 등록된(켜진) 항목 합계 */
+function fixedTotal_(){ return S.fixedExpenses.filter(f=>f.active).reduce((a,f)=>a+f.amount,0); }
+
+/** 저축 계획: 월 저축액 T를 정한 뒤, 각자 고정지출을 빼고 남는 돈이 같아지도록 저축을 나눕니다.
+ *  공동 고정지출은 반씩 나눕니다. 목표 기준은 이번 달 저축 전 금액으로 계산해 한 달 안에 값이 흔들리지 않게 합니다. */
+function computePlan_(){
+  const inc=S.plan.inc.map(v=>Number(v)||0);
+  const fixed=[0,0];
+  S.fixedExpenses.filter(f=>f.active).forEach(f=>{
+    const i=S.names.indexOf(f.owner);
+    if(i>=0) fixed[i]+=f.amount; else { fixed[0]+=f.amount/2; fixed[1]+=f.amount/2; }
+  });
+  let total=0, goalCount=0;
+  if(S.plan.mode==='goal'){
+    S.goals.forEach(g=>{
+      if(!(g.target>0) || !g.targetDate) return;
+      const before=goalAchieved_(g)-(S.goalProgressThisMonth[g.id]||0);
+      if(before>=g.target) return;
+      const months=Math.max(1, monthsBetween_(ymNow(), g.targetDate));
+      total+=Math.ceil((g.target-before)/months); goalCount++;
+    });
+  } else {
+    total=Math.round((inc[0]+inc[1])*(Number(S.plan.rate)||0)/100);
+  }
+  const free=(inc[0]+inc[1]-fixed[0]-fixed[1]-total)/2;
+  let save=[inc[0]-fixed[0]-free, inc[1]-fixed[1]-free];
+  let uneven=-1;
+  if(save[0]<0){ save=[0,total]; uneven=0; }
+  else if(save[1]<0){ save=[total,0]; uneven=1; }
+  save=save.map(v=>Math.round(v));
+  const left=[inc[0]-fixed[0]-save[0], inc[1]-fixed[1]-save[1]].map(v=>Math.round(v));
+  const rates=save.map((s,i)=>inc[i]>0 ? Math.round(s/inc[i]*1000)/10 : 0);
+  return { inc, fixed:fixed.map(Math.round), total, save, left, rates, uneven, goalCount,
+    ready: inc[0]+inc[1]>0, short: free<0 };
+}
+
 async function loadGoalProgress(){
   try{
     const r = await call('apiGoalProgress', S.pin);
-    S.goalProgress = r.progress||{}; S.goalRate = r.rate||{};
-    renderGoals();
+    S.goalProgress = r.progress||{}; S.goalRate = r.rate||{}; S.goalProgressThisMonth = r.thisMonth||{};
+    renderGoals(); renderMonth();
   }catch(e){ toast('진행률을 불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
 }
 $('#gl-toggle').onclick=()=>{
@@ -2316,9 +2479,8 @@ $('#income-save').onclick=async()=>{
 /* ── 공통 ──────────────────────────────────────── */
 function renderStrip(){
   const b=S.budget;
-  /* 용돈은 지급 즉시 전액 소비로 처리하므로, 남은 예산 계산에서는 애초에 제외합니다
-   * (고정지출·생활비 예산만 실제 지출과 비교합니다). */
-  const totalBudget = b ? (Number(b.fixed)||0)+(Number(b.living)||0) : 0;
+  /* 고정지출(등록 항목 합계)·생활비 예산만 실제 지출과 비교합니다. */
+  const totalBudget = fixedTotal_() + (b ? (Number(b.living)||0) : 0);
   if(!totalBudget){ $('#strip-val').textContent='—'; return; }
   const left = totalBudget - sumBy(t=>t.kind==='지출'&&t.category!=='용돈');
   $('#strip-val').textContent=won(left);
