@@ -406,8 +406,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <b id="m-title">—</b>
         <button id="m-next" aria-label="다음 달">›</button>
       </div>
-      <p class="big num" id="m-left">—</p>
-      <p class="sub" id="m-leftsub"></p>
       <div class="bars" id="m-bars"></div>
       <div class="stats" id="m-stats"></div>
       <h2 style="margin-top:26px">월별 수입·지출 추이</h2>
@@ -1384,14 +1382,6 @@ function renderMonth(){
   const income=sumBy(t=>t.kind==='수입');
   const expense=sumBy(t=>t.kind==='지출');
   const saved=sumBy(t=>t.kind==='저축');
-
-  $('#m-left').textContent = won(saved);
-  $('#m-left').style.color = '';
-  $('#m-leftsub').textContent = !plan.ready || !plan.total
-    ? '이 달 저축 · 아래 저축 계획을 정하면 목표 대비 얼마나 모았는지 보여드려요'
-    : saved>=plan.total
-      ? '이 달 저축 · 계획한 월 '+comma(plan.total)+'원을 채웠어요'
-      : '이 달 저축 · 계획한 월 '+comma(plan.total)+'원 중 '+Math.floor(saved/plan.total*100)+'% · '+comma(plan.total-saved)+'원 남음';
 
   const bars=$('#m-bars'); bars.innerHTML='';
   [
