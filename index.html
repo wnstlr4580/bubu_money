@@ -123,7 +123,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 #lc-daylist{margin-top:18px}
 #lc-daylist h3{font-size:.875rem;margin:0 0 8px;color:var(--muted);font-weight:600}
 
-.bars{margin-top:22px;display:flex;flex-direction:column;gap:16px}
+.bars{margin-top:4px;display:flex;flex-direction:column;gap:16px}
 .bar .top{display:flex;align-items:baseline;font-size:.875rem;margin-bottom:7px}
 .bar .top span{font-weight:600}
 .bar .top em{margin-left:auto;font-style:normal;color:var(--muted);font-size:.8125rem}
@@ -385,7 +385,13 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <b id="m-title">—</b>
         <button id="m-next" aria-label="다음 달">›</button>
       </div>
+      <h2>이번 달 선저축</h2>
       <div class="bars" id="m-bars"></div>
+      <div class="editor">
+        <h2>저축목표</h2>
+        <div id="gl-list"></div>
+        <button class="wide ghost" id="gl-toggle">+ 새 목표 추가</button>
+      </div>
       <div class="editor">
         <h2>저축 계획</h2>
         <div class="field"><label id="p-inc1-lbl">월평균 수입 1</label><input id="p-inc1" inputmode="numeric" placeholder="0"></div>
@@ -494,15 +500,6 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     </div>
   </div>
 
-  <!-- 저축목표 -->
-  <div class="sheet" id="goal-sheet">
-    <div class="sheet-head"><button id="goal-sheet-close" aria-label="닫기">‹</button><h2>저축목표</h2></div>
-    <div class="sheet-body">
-      <h2>저축 목표</h2>
-      <div id="gl-list"></div>
-      <button class="wide ghost" id="gl-toggle">+ 새 목표 추가</button>
-    </div>
-  </div>
   <div class="sheet top" id="gl-form">
     <div class="sheet-head"><button id="gl-form-close" aria-label="닫기">‹</button><h2>저축 목표 추가</h2></div>
     <div class="sheet-body">
@@ -547,14 +544,13 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
     <div class="sheet-head"><button id="mgmt-menu-close" aria-label="닫기">‹</button><h2>관리</h2></div>
     <div class="sheet-body">
       <button class="wide ghost" data-open="#fx-sheet">고정지출 관리</button>
-      <button class="wide ghost" data-open="#goal-sheet" style="margin-top:10px">저축목표</button>
       <button class="wide ghost" data-open="#cat-sheet" style="margin-top:10px">카테고리 관리</button>
     </div>
   </div>
 
   <nav id="tabs">
     <button data-tab="entry"  aria-pressed="true"><span class="ic">＋</span>입력</button>
-    <button data-tab="month"  aria-pressed="false"><span class="ic">◑</span>이 달</button>
+    <button data-tab="month"  aria-pressed="false"><span class="ic">◑</span>저축</button>
     <button data-tab="assets" aria-pressed="false"><span class="ic">◈</span>자산</button>
     <button data-tab="log"    aria-pressed="false"><span class="ic">≡</span>기록</button>
   </nav>
@@ -1198,6 +1194,7 @@ $('#save').onclick=async()=>{
     $('#entry-date').value=todayStr();
     applyLoad(d);
     if(kind==='수입') showSaveNotice_(owner, amount);
+    if(kind==='저축' && goalId) loadGoalProgress();
   }catch(e){
     S.digits=prevDigits; $('#note').value=prevNote; $('#entry-owner').value=owner; paintAmount();
     toast('저장하지 못했습니다. 다시 시도하세요.'+(e&&e.message?(' — '+e.message):''));
@@ -1257,6 +1254,11 @@ function renderMonth(){
         : '이번 달 수입이 아직 없어요')+'</p>';
     bars.appendChild(w);
   });
+  if(!bars.children.length){
+    const p=el('p','sub'); p.style.margin='0';
+    p.textContent='아래 저축 계획을 정하면 이번 달 각자 얼마를 먼저 저축하면 되는지 보여드려요.';
+    bars.appendChild(p);
+  }
 
   if(!document.activeElement || !document.activeElement.closest('.editor')){
     $('#p-inc1').value = S.plan.inc[0] ? comma(S.plan.inc[0]) : '';
@@ -1307,13 +1309,9 @@ function renderPlan(plan){
   if(S.plan.mode==='goal'){
     const p=el('p','plan-note');
     p.textContent = plan.goalCount
-      ? '목표금액과 목표 날짜가 있는 저축목표 '+plan.goalCount+'개를 기한 안에 채우는 금액이에요.'
-      : '목표금액과 목표 날짜를 정한 저축목표가 아직 없어요.';
+      ? '위 저축목표 중 목표금액과 목표 날짜가 있는 '+plan.goalCount+'개를 기한 안에 채우는 금액이에요.'
+      : '위 저축목표에 목표금액과 목표 날짜를 정해두면 매달 필요한 금액을 계산해요.';
     info.appendChild(p);
-    const go=el('button','wide ghost'); go.type='button'; go.style.marginTop='10px';
-    go.textContent=plan.goalCount?'저축목표 보기':'저축목표 만들기';
-    go.onclick=()=>{ openSheet('#goal-sheet'); loadGoalProgress(); };
-    info.appendChild(go);
   }
 
   const box=$('#p-result'); box.innerHTML='';
@@ -1582,6 +1580,7 @@ function buildTxRow(t){
     try{
       const d = await call('apiEditTx', S.pin, t.id, {date:dateInp.value, amount:amount, note:noteInp.value.trim(), who:whoSel.value}, S.month);
       toast('수정됨'); applyLoad(d); renderCalendar();
+      if(t.kind==='저축') loadGoalProgress();
     }catch(err){ toast('수정하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
   };
   editBox.querySelector('.ef-del').onclick=async e=>{
@@ -1590,6 +1589,7 @@ function buildTxRow(t){
     try{
       const d = await call('apiDeleteTx',S.pin,t.id,S.month);
       toast('삭제됨'); applyLoad(d); renderCalendar();
+      if(t.kind==='저축') loadGoalProgress();
     }catch(err){ toast('삭제하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
   };
   editBox.onclick=e=>e.stopPropagation();
@@ -1786,7 +1786,6 @@ $('#fx-add').onclick=async()=>{
 $('#fx-toggle').onclick=()=>openFixedForm(null);
 $('#fx-form-close').onclick=()=>closeSheet('#fx-form');
 $('#fx-sheet-close').onclick=()=>closeSheet('#fx-sheet');
-$('#goal-sheet-close').onclick=()=>closeSheet('#goal-sheet');
 $('#cat-sheet-close').onclick=()=>closeSheet('#cat-sheet');
 $('#mgmt-menu-open').onclick=()=>openSheet('#mgmt-menu');
 $('#mgmt-menu-close').onclick=()=>closeSheet('#mgmt-menu');
@@ -1799,7 +1798,6 @@ document.querySelectorAll('#mgmt-menu [data-open]').forEach(btn=>{
     requestAnimationFrame(()=>{ menu.style.transition=''; });
     const target=btn.dataset.open;
     openSheet(target);
-    if(target==='#goal-sheet') loadGoalProgress();
   };
 });
 
