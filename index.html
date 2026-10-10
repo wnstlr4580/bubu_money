@@ -494,7 +494,9 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
       <div class="field"><label>항목</label><input id="fx-item" placeholder="예: 월세"></div>
       <div class="field"><label>금액</label><input id="fx-amount" inputmode="numeric" placeholder="0"></div>
       <div class="field"><label>결제일</label><input id="fx-day" inputmode="numeric" placeholder="예: 25" style="width:30%"></div>
-      <div class="field"><label>소유자</label><select id="fx-owner"></select></div>
+      <div class="field"><label>소유주</label><select id="fx-owner"></select></div>
+      <div class="field"><label>내는 사람</label><select id="fx-payer"></select></div>
+      <p class="sub" style="margin:4px 0 10px">저축 계획은 내는 사람의 수입에서 이 금액을 빼고 계산해요. 공동이면 반씩 나눠요.</p>
       <div class="field"><label>메모</label><input id="fx-memo" placeholder="선택"></div>
       <button class="wide" id="fx-add">고정지출 추가</button>
     </div>
@@ -635,7 +637,7 @@ function docToAsset_(doc){
 function docToFixed_(doc){
   const f=doc.data();
   return { id:doc.id, item:f.item, amount:Number(f.amount)||0, day:Number(f.day)||1,
-    owner:f.owner||'', memo:f.memo||'', active:f.active!==false, lastMonth:f.lastMonth||'' };
+    owner:f.owner||'', payer:f.payer||f.owner||'', memo:f.memo||'', active:f.active!==false, lastMonth:f.lastMonth||'' };
 }
 function docToCategory_(doc){
   const c=doc.data();
@@ -811,14 +813,14 @@ API.apiSaveFixed = async (pin, f) => {
   if(f.id){
     await db.collection('fixed').doc(f.id).update({
       item:String(f.item||'').slice(0,60), amount:Number(f.amount)||0, day,
-      owner:String(f.owner||''), memo:String(f.memo||'').slice(0,200), active: f.active!==false,
+      owner:String(f.owner||''), payer:String(f.payer||f.owner||''), memo:String(f.memo||'').slice(0,200), active: f.active!==false,
     });
     return Object.assign(await API.apiLoadExtras(pin), { success:true });
   }
   if(!f.item || !(Number(f.amount)>0)) throw new Error('항목과 금액을 확인하세요.');
   await db.collection('fixed').add({
     item:String(f.item).slice(0,60), amount:Number(f.amount)||0, day,
-    owner:String(f.owner||''), memo:String(f.memo||'').slice(0,200), active:true, lastMonth:'',
+    owner:String(f.owner||''), payer:String(f.payer||f.owner||''), memo:String(f.memo||'').slice(0,200), active:true, lastMonth:'',
   });
   return Object.assign(await API.apiLoadExtras(pin), { success:true });
 };
@@ -1324,7 +1326,7 @@ function renderPlan(plan){
   box.appendChild(sum);
   const rows=[
     ['월수입', plan.inc],
-    ['고정지출', plan.fixed],
+    ['내는 고정지출', plan.fixed],
     ['저축', plan.save],
     ['저축 비율', plan.rates.map(r=>r+'%')],
     ['남는 돈', plan.left],
@@ -1341,7 +1343,7 @@ function renderPlan(plan){
   const note=el('p','plan-note'+(plan.short||plan.uneven>=0?' warn':''));
   if(plan.short) note.textContent='수입으로 고정지출과 저축을 다 감당하기 어려워요. 저축 비율이나 목표를 낮춰보세요.';
   else if(plan.uneven>=0) note.textContent=S.names[plan.uneven]+'님은 고정지출을 빼면 남는 돈이 적어서, 저축은 '+S.names[1-plan.uneven]+'님이 모두 맡는 걸로 계산했어요.';
-  else note.textContent='각자 고정지출을 빼고 남는 돈이 같아지도록 저축을 나눴어요. 공동 고정지출은 반씩 나눠 계산합니다. 수입이 들어올 때마다 저축 비율만큼 먼저 떼어두세요.';
+  else note.textContent='각자 내는 고정지출을 빼고 남는 돈이 같아지도록 저축을 나눴어요. 공동으로 내는 고정지출은 반씩 나눠 계산합니다. 수입이 들어올 때마다 저축 비율만큼 먼저 떼어두세요.';
   box.appendChild(note);
 }
 
@@ -1726,7 +1728,7 @@ function renderFixed(){
 
     const content=el('div','content');
     content.innerHTML='<div class="t">'+f.item+'<span class="chev">›</span></div>'+
-      '<div class="amt">'+comma(f.amount)+'원'+(f.memo?' · '+f.memo:'')+'</div>';
+      '<div class="amt">'+comma(f.amount)+'원'+(f.payer&&f.payer!==f.owner?' · '+f.payer+' 결제':'')+(f.memo?' · '+f.memo:'')+'</div>';
     content.onclick=()=>openFixedForm(f);
     row.appendChild(content);
 
@@ -1736,7 +1738,7 @@ function renderFixed(){
       e.stopPropagation();
       try{
         applyExtras(await call('apiSaveFixed',S.pin,{id:f.id,item:f.item,amount:f.amount,day:f.day,
-          owner:f.owner,memo:f.memo,active:!f.active}));
+          owner:f.owner,payer:f.payer,memo:f.memo,active:!f.active}));
       }catch(err){ toast('변경하지 못했습니다'+(err&&err.message?(' — '+err.message):'')); }
     };
     const x=el('button','x'); x.textContent='✕'; x.setAttribute('aria-label','삭제');
@@ -1759,7 +1761,8 @@ function openFixedForm(f){
   $('#fx-amount').value=f?comma(f.amount):'';
   $('#fx-day').value=f?f.day:'';
   buildOwnerSelect($('#fx-owner'));
-  if(f) $('#fx-owner').value=f.owner;
+  buildOwnerSelect($('#fx-payer'));
+  if(f){ $('#fx-owner').value=f.owner; $('#fx-payer').value=f.payer||f.owner; }
   $('#fx-memo').value=f?f.memo:'';
   $('#fx-form-title').textContent=f?'고정지출 수정':'고정지출 추가';
   $('#fx-add').textContent=f?'저장':'고정지출 추가';
@@ -1771,11 +1774,12 @@ $('#fx-add').onclick=async()=>{
   const amount=digitsOf('#fx-amount');
   const day=Number($('#fx-day').value)||0;
   const owner=$('#fx-owner').value;
+  const payer=$('#fx-payer').value;
   const memo=$('#fx-memo').value.trim();
   if(!item || amount<=0 || day<1 || day>31){ toast('항목, 금액, 결제일(1~31)을 확인하세요'); return; }
   $('#fx-add').disabled=true;
   try{
-    const d = await call('apiSaveFixed',S.pin,{id:id||undefined,item:item,amount:amount,day:day,owner:owner,memo:memo});
+    const d = await call('apiSaveFixed',S.pin,{id:id||undefined,item:item,amount:amount,day:day,owner:owner,payer:payer,memo:memo});
     $('#fx-id').value=''; $('#fx-item').value=''; $('#fx-amount').value=''; $('#fx-day').value=''; $('#fx-memo').value='';
     closeSheet('#fx-form');
     toast(id?'저장됨':'고정지출 등록됨'); applyExtras(d);
@@ -1927,12 +1931,12 @@ function goalAchieved_(g){ return (Number(g.base)||0) + (S.goalProgress[g.id]||0
 function fixedTotal_(){ return S.fixedExpenses.filter(f=>f.active).reduce((a,f)=>a+f.amount,0); }
 
 /** 저축 계획: 월 저축액 T를 정한 뒤, 각자 고정지출을 빼고 남는 돈이 같아지도록 저축을 나눕니다.
- *  공동 고정지출은 반씩 나눕니다. 목표 기준은 이번 달 저축 전 금액으로 계산해 한 달 안에 값이 흔들리지 않게 합니다. */
+ *  고정지출은 내는 사람 기준으로 빼고, 공동이면 반씩 나눕니다. 목표 기준은 이번 달 저축 전 금액으로 계산해 한 달 안에 값이 흔들리지 않게 합니다. */
 function computePlan_(){
   const inc=S.plan.inc.map(v=>Number(v)||0);
   const fixed=[0,0];
   S.fixedExpenses.filter(f=>f.active).forEach(f=>{
-    const i=S.names.indexOf(f.owner);
+    const i=S.names.indexOf(f.payer||f.owner);
     if(i>=0) fixed[i]+=f.amount; else { fixed[0]+=f.amount/2; fixed[1]+=f.amount/2; }
   });
   let total=0, goalCount=0;
