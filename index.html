@@ -83,6 +83,8 @@ button{cursor:pointer}
 .daterow input[type=date]{background:var(--surface);border-radius:var(--r-sm);padding:8px 10px;font-size:.875rem}
 .daterow button{font-size:.8125rem;color:var(--muted);font-weight:600;
   padding:7px 12px;border-radius:var(--r-sm);background:var(--surface)}
+.split{flex:none;margin:6px 2px 0;font-size:.8125rem;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .commit{flex:none;display:flex;gap:8px;padding:12px 0 calc(12px + var(--pad))}
 .commit input{flex:1;min-width:0;background:var(--surface);border-radius:var(--r-lg);padding:0 15px;font-size:.9375rem}
 .commit input::placeholder{color:var(--faint)}
@@ -216,6 +218,8 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
 .row .edit-box .ef-amt{text-align:right}
 .row .edit-box select{flex:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 8px;font-size:.875rem}
 .row .edit-box select.ef-grow{flex:1;min-width:0}
+.row .edit-box .ef-row[hidden]{display:none}
+.row .edit-box .ef-lbl{flex:none;align-self:center;font-size:.8125rem;color:var(--muted);font-weight:600}
 .row .who.joint{background:var(--faint)}
 .row .edit-box .ef-actions{display:flex;gap:8px;margin-top:2px}
 .row .edit-box .ef-actions button{flex:1;padding:10px;border-radius:var(--r-sm);font-weight:700;font-size:.8125rem}
@@ -377,6 +381,7 @@ h2{font-size:.8125rem;font-weight:600;color:var(--muted);margin:0 0 10px}
         <button id="date-today" type="button">오늘</button>
       </div>
     </div>
+    <p class="split" id="entry-split" hidden></p>
     <div class="commit">
       <select id="entry-owner" aria-label="소유자"></select>
       <input id="note" placeholder="메모 (선택)" enterkeyhint="done">
@@ -628,7 +633,7 @@ async function call(fn){
 function docToTx_(doc){
   const t=doc.data();
   return { id:doc.id, date:t.date, amount:Number(t.amount)||0, kind:t.kind,
-    category:t.category, who:t.who, note:t.note||'', ym:t.ym, createdAt:Number(t.createdAt)||0 };
+    category:t.category, who:t.who, note:t.note||'', ym:t.ym, goalId:t.goalId||'', createdAt:Number(t.createdAt)||0 };
 }
 function sortTx_(list){
   return list.slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.createdAt-a.createdAt));
@@ -746,14 +751,22 @@ API.apiAddTx = async (pin, t) => {
   if(['지출','저축','수입'].indexOf(t.kind)<0) throw new Error('구분이 올바르지 않습니다.');
   const date = t.date || todayStr();
   const ym = date.slice(0,7);
-  /* 문서 번호(t.id)를 화면에서 정해 보내므로, 같은 기록을 다시 보내도 같은 문서에 덮어써집니다. */
-  const ref = t.id ? db.collection('tx').doc(t.id) : db.collection('tx').doc();
-  await ref.set({
-    date, amount:Number(t.amount), kind:t.kind, category:t.category, who:t.who,
-    note:String(t.note||'').slice(0,200), ym, goalId:String(t.goalId||''), createdAt:Number(t.createdAt)||Date.now(),
+  /* 문서 번호(id)를 화면에서 정해 보내므로, 같은 기록을 다시 보내도 같은 문서에 덮어써집니다.
+   * 저축을 여러 목표로 나눌 때는 t.parts = [{id, goalId, amount}] 로 오고, 한꺼번에(전부 아니면 하나도 안) 씁니다. */
+  const parts = t.parts || [{ id:t.id, goalId:t.goalId, amount:t.amount }];
+  if(!parts.length || parts.some(p=>!(Number(p.amount)>0))) throw new Error('금액을 확인하세요.');
+  const batch = db.batch(), ids = [];
+  parts.forEach(p=>{
+    const ref = p.id ? db.collection('tx').doc(p.id) : db.collection('tx').doc();
+    ids.push(ref.id);
+    batch.set(ref, {
+      date, amount:Number(p.amount), kind:t.kind, category:t.category, who:t.who,
+      note:String(t.note||'').slice(0,200), ym, goalId:String(p.goalId||''), createdAt:Number(t.createdAt)||Date.now(),
+    });
   });
+  await batch.commit();
   const loaded = await API.apiLoad(pin, ym);
-  loaded.id = ref.id;
+  loaded.id = ids[0];
   return loaded;
 };
 
@@ -1037,7 +1050,7 @@ const ASSET_KINDS=['예금','투자','연금','복지포인트','부동산','부
 const S={ pin:'', who:'', names:['나','배우자'], plan:{inc:[0,0],mode:'rate',rate:0}, goalProgressThisMonth:{}, month:'',
           tx:[], recent:[], assets:[], series:[],
           fixedExpenses:[], categories:[], goals:[], goalProgress:{},
-          entryKind:'지출', cat:'', digits:'', goal:'',
+          entryKind:'지출', cat:'', digits:'', goal:'auto',
           logFilter:{kind:'all', who:'all', cat:'all', q:''}, searchResult:null,
           logView:'list', calSelDate:null,
           };
@@ -1222,16 +1235,55 @@ document.querySelectorAll('#kindsel button').forEach(btn=>{
     S.cat='';
     buildChips();
     buildGoalRow();
+    if(S.entryKind==='저축') loadGoalProgress();   // 배우자가 그새 저축했을 수 있어 목표별 남은 금액을 새로 받음
   };
 });
+/* 저축 목표 고르기: 기본은 '가까운 목표부터'(AUTO_GOAL). 목표 날짜가 가까운 목표부터 남은 금액만큼 채우고,
+ * 넘치면 다음 목표로, 다 채우고도 남으면 일반 저축으로 나눠 기록합니다. */
+const AUTO_GOAL='auto';
+/** 목표 날짜가 가까운 순 (날짜 없는 목표는 맨 뒤, 같으면 이름순). */
+function goalsSorted_(){
+  return S.goals.slice().sort((a,b)=>
+    (a.targetDate||'9999-12').localeCompare(b.targetDate||'9999-12') || a.name.localeCompare(b.name,'ko'));
+}
+/** 자동으로 채울 목표: 목표금액이 있고 아직 다 못 모은 목표, 가까운 순. */
+function goalQueue_(){ return goalsSorted_().filter(g=>g.target>0 && goalAchieved_(g)<g.target); }
+function splitSaving_(amount){
+  const parts=[]; let left=amount;
+  goalQueue_().forEach(g=>{
+    if(left<=0) return;
+    const put=Math.min(g.target-goalAchieved_(g), left);
+    parts.push({ goalId:g.id, name:g.name, amount:put }); left-=put;
+  });
+  if(left>0) parts.push({ goalId:'', name:'일반 저축', amount:left });
+  return parts;
+}
+function goalLabel_(goalId){
+  if(!goalId) return '일반 저축';
+  const g=S.goals.find(x=>x.id===goalId);
+  return g ? g.name+' 목표' : '삭제된 목표';
+}
 function buildGoalRow(){
   const sel=$('#entry-goal');
-  if(S.entryKind!=='저축' || !S.goals.length){ sel.hidden=true; return; }
+  if(S.entryKind!=='저축' || !S.goals.length){ sel.hidden=true; paintSplit_(); return; }
   sel.hidden=false;
-  const prev=sel.value;
-  sel.innerHTML='<option value="">일반 저축</option>'+
-    S.goals.map(g=>'<option value="'+g.id+'">'+g.name+'</option>').join('');
-  if(prev && S.goals.some(g=>g.id===prev)) sel.value=prev;
+  sel.innerHTML='<option value="'+AUTO_GOAL+'">가까운 순</option>'+
+    goalsSorted_().map(g=>'<option value="'+g.id+'">'+g.name+'</option>').join('')+
+    '<option value="">일반 저축</option>';
+  if(S.goal!==AUTO_GOAL && S.goal!=='' && !S.goals.some(g=>g.id===S.goal)) S.goal=AUTO_GOAL;
+  sel.value=S.goal;
+  paintSplit_();
+}
+$('#entry-goal').onchange=()=>{ S.goal=$('#entry-goal').value; paintSplit_(); };
+/** '가까운 목표부터'일 때 금액이 어느 목표에 얼마씩 들어갈지 미리 보여줍니다. */
+function paintSplit_(){
+  const p=$('#entry-split');
+  if(S.entryKind!=='저축' || $('#entry-goal').hidden || S.goal!==AUTO_GOAL){ p.hidden=true; return; }
+  p.hidden=false;
+  const amount=Number(S.digits||0), queue=goalQueue_();
+  if(!queue.length) p.textContent='채울 목표가 없어서 일반 저축으로 기록돼요';
+  else if(amount<=0) p.textContent=queue[0].name+'부터 채워요 · '+comma(queue[0].target-goalAchieved_(queue[0]))+'원 남음';
+  else p.textContent='→ '+splitSaving_(amount).map(x=>x.name+' '+comma(x.amount)).join(' · ');
 }
 function buildChips(){
   const box=$('#chips'); box.innerHTML='';
@@ -1267,6 +1319,7 @@ function paintAmount(){
   $('#amt').innerHTML='<span class="won">₩</span>'+comma(v);
   $('#amt').classList.toggle('zero', v===0);
   $('#save').disabled = v<=0;
+  paintSplit_();
 }
 $('#entry-date').value=todayStr();
 $('#date-today').onclick=()=>{ $('#entry-date').value=todayStr(); };
@@ -1275,29 +1328,36 @@ $('#save').onclick=async()=>{
   if(!S.cat){ toast('카테고리를 선택하세요'); return; }
   const note=$('#note').value.trim();
   const kind=S.entryKind, cat=S.cat;
-  const goalId = kind==='저축' ? $('#entry-goal').value : '';
+  const goal = (kind==='저축' && !$('#entry-goal').hidden) ? $('#entry-goal').value : '';
   const date=$('#entry-date').value || todayStr();
   const owner=$('#entry-owner').value || S.who;
   const prevDigits=S.digits, prevNote=$('#note').value;
-  const entry={amount:amount, kind:kind, category:cat, who:owner, note:note, date:date, goalId:goalId};
+  const entry={amount:amount, kind:kind, category:cat, who:owner, note:note, date:date, goal:goal};
   /* 응답이 늦어 '저장하지 못했습니다'가 떠도 실제로는 저장됐을 수 있어서, 실패한 것과 같은 내용을
-   * 다시 기록하면 같은 문서 번호를 다시 써서 두 번 저장되지 않게 합니다. */
+   * 다시 기록하면 그때 나눈 그대로 같은 문서 번호를 다시 써서 두 번 저장되지 않게 합니다. */
   const sig=JSON.stringify(entry);
   const retry=(S.failedTx && S.failedTx.sig===sig) ? S.failedTx : null;
-  const txId=retry ? retry.id : db.collection('tx').doc().id;
+  const parts=retry ? retry.parts
+    : (goal===AUTO_GOAL ? splitSaving_(amount) : [{ goalId:goal, amount:amount }])
+        .map(p=>({ id:db.collection('tx').doc().id, goalId:p.goalId, amount:p.amount }));
   const createdAt=retry ? retry.createdAt : Date.now();
+  /* 저장이 끝나기 전에 바로 다음 저축을 넣어도 방금 채운 만큼을 반영해서 나누도록 미리 더해 둡니다 (실패하면 되돌림). */
+  const bumpGoals=sign=>parts.forEach(p=>{ if(p.goalId) S.goalProgress[p.goalId]=(S.goalProgress[p.goalId]||0)+sign*p.amount; });
+  if(kind==='저축') bumpGoals(1);
   S.failedTx=null;
   $('#save').disabled=true;
   S.digits=''; $('#note').value=''; $('#entry-owner').value=S.who; paintAmount();
-  toast(cat+' '+won(amount)+' 기록됨');
+  toast(cat+' '+won(amount)+' 기록됨'+(parts.length>1?' · '+parts.length+'건으로 나눔':''));
   try{
-    const d = await call('apiAddTx', S.pin, Object.assign({id:txId, createdAt:createdAt}, entry));
+    const d = await call('apiAddTx', S.pin, { amount:amount, kind:kind, category:cat, who:owner, note:note, date:date,
+      parts:parts, createdAt:createdAt });
     $('#entry-date').value=todayStr();
     applyLoad(d);
     if(kind==='수입') showSaveNotice_(owner, amount);
-    if(kind==='저축' && goalId) loadGoalProgress();
+    if(kind==='저축'){ S.goal=AUTO_GOAL; buildGoalRow(); loadGoalProgress(); }
   }catch(e){
-    S.failedTx={sig:sig, id:txId, createdAt:createdAt};
+    S.failedTx={sig:sig, parts:parts, createdAt:createdAt};
+    if(kind==='저축') bumpGoals(-1);
     S.digits=prevDigits; $('#note').value=prevNote; $('#entry-owner').value=owner; paintAmount();
     toast('저장하지 못했습니다. 다시 시도하세요.'+(e&&e.message?(' — '+e.message):''));
   }
@@ -1683,7 +1743,8 @@ async function loadMoreTx_(){
 /** 기록 목록·캘린더 상세 목록에서 공통으로 쓰는 거래 한 줄(펼치면 수정 가능). */
 function buildTxRow(t){
   const row=el('div','row');
-  const metaLine = t.note ? (t.category+' · '+t.who) : t.who;
+  let metaLine = t.note ? (t.category+' · '+t.who) : t.who;
+  if(t.kind==='저축') metaLine += ' · '+goalLabel_(t.goalId);   // 어느 목표에 저축했는지
   const whoCls = t.who===S.names[1] ? ' you' : (t.who===S.names[0] ? '' : ' joint');
   row.innerHTML='<span class="who'+whoCls+'"></span>'+
     '<div class="main"><div class="t">'+(t.note||t.category)+'</div>'+
@@ -1694,6 +1755,8 @@ function buildTxRow(t){
   editBox.innerHTML=
     '<div class="ef-row"><select class="ef-kind ef-grow" aria-label="구분"></select>'+
     '<select class="ef-cat ef-grow" aria-label="카테고리"></select></div>'+
+    '<div class="ef-row ef-goal-row"><span class="ef-lbl">저축 목표</span>'+
+    '<select class="ef-goal ef-grow" aria-label="저축 목표"></select></div>'+
     '<div class="ef-row"><input type="date" class="ef-date">'+
     '<input inputmode="numeric" class="ef-amt" placeholder="금액"></div>'+
     '<div class="ef-row"><select class="ef-who"></select><input class="ef-note" placeholder="메모"></div>'+
@@ -1717,7 +1780,17 @@ function buildTxRow(t){
     if(names.indexOf(keep)>=0) catSel.value=keep;
   };
   fillCats(t.category);
-  kindSel.onchange=()=>fillCats(catSel.value);
+  /* 저축이면 어느 목표에 넣을지 고를 수 있게 (지워진 목표에 넣었던 기록은 그대로 둘 수 있게 넣어둠). */
+  const goalRow=editBox.querySelector('.ef-goal-row'), goalSel=editBox.querySelector('.ef-goal');
+  goalsSorted_().forEach(g=>{ const o=document.createElement('option'); o.value=g.id; o.textContent=g.name; goalSel.appendChild(o); });
+  const general=document.createElement('option'); general.value=''; general.textContent='일반 저축'; goalSel.appendChild(general);
+  if(t.goalId && !S.goals.some(g=>g.id===t.goalId)){
+    const o=document.createElement('option'); o.value=t.goalId; o.textContent='삭제된 목표'; goalSel.prepend(o);
+  }
+  goalSel.value = t.kind==='저축' ? t.goalId : '';
+  const showGoal=()=>{ goalRow.hidden = kindSel.value!=='저축'; };
+  showGoal();
+  kindSel.onchange=()=>{ fillCats(catSel.value); showGoal(); };
 
   editBox.querySelector('.ef-save').onclick=async e=>{
     e.stopPropagation();
@@ -1725,8 +1798,8 @@ function buildTxRow(t){
     if(!dateInp.value || amount<=0){ toast('날짜와 금액을 확인하세요'); return; }
     if(!catSel.value){ toast('카테고리를 선택하세요'); return; }
     const patch={date:dateInp.value, amount:amount, note:noteInp.value.trim(), who:whoSel.value,
-      kind:kindSel.value, category:catSel.value};
-    if(kindSel.value!==t.kind) patch.goalId='';   // 구분이 바뀌면 저축 목표 연결은 풉니다
+      kind:kindSel.value, category:catSel.value,
+      goalId: kindSel.value==='저축' ? goalSel.value : ''};   // 저축이 아니면 목표 연결은 풉니다
     try{
       const d = await call('apiEditTx', S.pin, t.id, patch, S.month);
       toast('수정됨'); applyLoad(d); renderCalendar();
@@ -2115,7 +2188,7 @@ async function loadGoalProgress(){
   try{
     const r = await call('apiGoalProgress', S.pin);
     S.goalProgress = r.progress||{}; S.goalProgressThisMonth = r.thisMonth||{};
-    renderGoals(); renderMonth();
+    renderGoals(); renderMonth(); paintSplit_();
   }catch(e){ toast('진행률을 불러오지 못했습니다'+(e&&e.message?(' — '+e.message):'')); }
 }
 $('#gl-toggle').onclick=()=>{
